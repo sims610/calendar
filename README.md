@@ -1,3 +1,5 @@
+[![CI Pipeline](https://github.com/sims610/calendar/actions/workflows/ci.yml/badge.svg)](https://github.com/sims610/calendar/actions/workflows/ci.yml)
+
 # Overview
 This project is a calendar application for your phone. It is a Progressive Web App (PWA),
 so it can be installed to the home screen from the browser and works offline.
