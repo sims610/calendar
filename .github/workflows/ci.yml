@@ -25,17 +25,17 @@ jobs:
         run: |
           version=$(date +'%Y%m%d.%H%M%S')
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          printf '{"version": "%s" }' "$version" > public/version.json
+          printf '{"version": "%s" }' "$version" > client/public/version.json
 
       - name: Build
         run: |
           npm ci && npm run build
-          cp dist/index.html dist/404.html
+          cp client/dist/index.html client/dist/404.html
 
       - name: Update pages artifact
         uses: actions/upload-pages-artifact@v5.0.0
         with:
-          path: dist/
+          path: client/dist/
   deploy:
     needs: build
     permissions:
@@ -49,4 +49,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5.0.1
-        
