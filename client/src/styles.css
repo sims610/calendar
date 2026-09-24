@@ -1,0 +1,350 @@
+:root {
+  --crimson: #9c1552;
+  --accent: #29c5e6;
+  --text: #222;
+  --muted: #777;
+  --line: #e6e6e6;
+  --strip-background: #f1f1f1;
+  --hour-label-width: 64px;
+
+  font-family: Roboto, "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #fff;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* ---------- Page layout ---------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  background: #fff;
+}
+
+.main {
+  position: relative;
+  flex: 1;
+  min-height: 0; /* lets the day view scroll inside the flex column */
+}
+
+/* ---------- Header ---------- */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+  background: var(--crimson);
+  color: #fff;
+}
+
+.header-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  padding: 6px 8px;
+  font-size: 26px;
+  font-weight: 500;
+}
+
+.header-icon-button {
+  display: flex;
+  padding: 8px;
+  color: var(--accent);
+}
+
+.hidden-date-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------- Date strip ---------- */
+
+.date-strip {
+  display: flex;
+  overflow-x: auto;
+  background: var(--strip-background);
+  scrollbar-width: none;
+}
+
+.date-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.date-strip-day {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  width: 16.66%;
+  min-width: 64px;
+  padding: 6px 0;
+  border: 2px solid transparent;
+}
+
+.date-strip-day.selected {
+  border-color: var(--accent);
+  background: #fff;
+}
+
+.date-strip-day.today .date-strip-number {
+  color: var(--crimson);
+  font-weight: 700;
+}
+
+.date-strip-weekday {
+  font-size: 15px;
+}
+
+.date-strip-number {
+  font-size: 22px;
+}
+
+.error-banner {
+  padding: 8px 16px;
+  background: #fde2e4;
+  color: #8a1c25;
+  font-size: 14px;
+}
+
+/* ---------- Day view ---------- */
+
+.day-view {
+  height: 100%;
+  overflow-y: auto;
+}
+
+.day-view-grid {
+  position: relative;
+}
+
+.hour-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  height: 0; /* the row is just a line; the label is centred on it */
+}
+
+.hour-label {
+  width: var(--hour-label-width);
+  padding-right: 12px;
+  text-align: right;
+  font-size: 15px;
+  color: #555;
+}
+
+.hour-line {
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+
+.events-area {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--hour-label-width) + 8px);
+  right: 0;
+}
+
+.event-block {
+  position: absolute;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 2px 12px;
+  padding: 6px 8px;
+  overflow: hidden;
+  text-align: left;
+  border-left: 4px solid;
+  border-bottom: 2px solid #fff; /* small gap between back-to-back events */
+}
+
+.event-title {
+  text-transform: uppercase;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.event-time {
+  font-size: 15px;
+  color: #555;
+}
+
+.event-repeat {
+  display: flex;
+  align-items: center;
+  color: #555;
+}
+
+.fab {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ---------- Bottom navigation ---------- */
+
+.bottom-nav {
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid #ccc;
+  background: #fff;
+}
+
+.bottom-nav-tab {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0;
+  font-size: 14px;
+  color: #aaa;
+}
+
+.bottom-nav-tab:disabled {
+  cursor: default;
+}
+
+.bottom-nav-tab.active {
+  color: #1a2a55;
+}
+
+/* ---------- Event form (bottom sheet) ---------- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 640px;
+  padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 16px 16px 0 0;
+  background: #fff;
+}
+
+.sheet h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.sheet label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.sheet input,
+.sheet select {
+  padding: 10px;
+  font: inherit;
+  font-size: 16px; /* 16px stops iOS from zooming in on focus */
+  color: var(--text);
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.form-note,
+.form-error {
+  margin: 0;
+  font-size: 14px;
+}
+
+.form-note {
+  color: var(--muted);
+}
+
+.form-error {
+  color: #c62d3a;
+}
+
+.form-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.form-buttons button {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.form-buttons button:disabled {
+  opacity: 0.5;
+}
+
+.button-primary {
+  background: var(--crimson);
+  color: #fff;
+}
+
+.button-plain {
+  color: var(--muted);
+}
+
+.button-danger {
+  color: #c62d3a;
+}
