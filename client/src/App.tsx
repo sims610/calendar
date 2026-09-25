@@ -6,7 +6,7 @@ import { DayView } from "./components/DayView";
 import { EventForm } from "./components/EventForm";
 import { Header } from "./components/Header";
 import { PlusIcon } from "./components/Icons";
-import { minutesToTime, todayKey } from "./dateUtils";
+import { minutesToTime, timeToMinutes, todayKey } from "./dateUtils";
 import type { CalendarEvent, EventInput } from "./types";
 
 /** What the event form is doing: closed, creating a new event, or editing one. */
@@ -66,6 +66,26 @@ export function App() {
     await loadEvents();
   };
 
+  /** Moves an event to a new start time, keeping its length. Repeating events move as a series. */
+  const moveEvent = async (event: CalendarEvent, startMinutes: number) => {
+    const duration = timeToMinutes(event.endTime) - timeToMinutes(event.startTime);
+    const moved: CalendarEvent = {
+      ...event,
+      startTime: minutesToTime(startMinutes),
+      endTime: minutesToTime(startMinutes + duration),
+    };
+
+    // Show the new time straight away so the event doesn't jump back while saving.
+    setEvents((current) => current.map((item) => (item.id === moved.id ? moved : item)));
+    try {
+      await storage.updateEvent(moved.id, moved);
+    } catch {
+      // Put the event back where it was saved, then explain why.
+      await loadEvents();
+      setLoadError("Couldn't move the event.");
+    }
+  };
+
   return (
     <div className="app">
       <Header selectedDate={selectedDate} onSelectDate={setSelectedDate} />
@@ -78,6 +98,7 @@ export function App() {
           date={selectedDate}
           events={events}
           onEventClick={(event) => setFormState({ mode: "edit", event })}
+          onEventMove={moveEvent}
         />
         <button
           className="fab"

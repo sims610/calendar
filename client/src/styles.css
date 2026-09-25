@@ -220,6 +220,17 @@ button {
   text-align: left;
   border-left: 4px solid;
   border-bottom: 2px solid #fff; /* small gap between back-to-back events */
+  /* Pressing and holding moves the event, so stop the phone selecting text or showing a menu. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* The event being moved lifts above the others. */
+.event-block.dragging {
+  z-index: 2;
+  opacity: 0.9;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .event-title {

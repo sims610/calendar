@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { colorForTitle } from "../eventColors";
-import { formatHour, formatTimeRange } from "../dateUtils";
+import { formatHour, formatTimeRange, minutesToTime } from "../dateUtils";
 import { layoutEvents } from "../layoutEvents";
 import type { CalendarEvent } from "../types";
+import { useEventDrag } from "../useEventDrag";
 import { CurrentTimeLine } from "./CurrentTimeLine";
 import { RepeatIcon } from "./Icons";
 
@@ -18,11 +19,20 @@ interface DayViewProps {
   date: string;
   events: CalendarEvent[];
   onEventClick: (event: CalendarEvent) => void;
+  /** Called when an event is pressed, held and dragged to a new start time. */
+  onEventMove: (event: CalendarEvent, startMinutes: number) => void;
 }
 
 /** The scrolling timeline of hours with the day's events laid on top. */
-export function DayView({ date, events, onEventClick }: DayViewProps) {
+export function DayView({ date, events, onEventClick, onEventMove }: DayViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const drag = useEventDrag({
+    scrollRef,
+    gridRef,
+    pixelsPerMinute: PIXELS_PER_MINUTE,
+    onMove: onEventMove,
+  });
 
   // Start each day scrolled to the morning instead of midnight.
   useEffect(() => {
@@ -33,7 +43,7 @@ export function DayView({ date, events, onEventClick }: DayViewProps) {
 
   return (
     <div className="day-view" ref={scrollRef}>
-      <div className="day-view-grid" style={{ height: 24 * HOUR_HEIGHT }}>
+      <div className="day-view-grid" ref={gridRef} style={{ height: 24 * HOUR_HEIGHT }}>
         {HOURS.map((hour) => (
           <div key={hour} className="hour-row" style={{ top: hour * HOUR_HEIGHT }}>
             <span className="hour-label">{hour === 0 ? "" : formatHour(hour)}</span>
@@ -44,18 +54,31 @@ export function DayView({ date, events, onEventClick }: DayViewProps) {
         <CurrentTimeLine date={date} pixelsPerMinute={PIXELS_PER_MINUTE} />
 
         <div className="events-area">
-          {layoutEvents(events).map(({ event, startMinutes, endMinutes, column, columnCount }) => {
+          {layoutEvents(events).map((positioned) => {
+            const { event, column, columnCount } = positioned;
             const color = colorForTitle(event.title);
             const widthPercent = 100 / columnCount;
+
+            // While an event is being dragged, draw it where it would land.
+            const isDragging = drag.preview?.eventId === event.id;
+            const durationMinutes = positioned.endMinutes - positioned.startMinutes;
+            const startMinutes =
+              isDragging && drag.preview ? drag.preview.startMinutes : positioned.startMinutes;
+            const endMinutes = startMinutes + durationMinutes;
 
             return (
               <button
                 key={event.id}
-                className="event-block"
-                onClick={() => onEventClick(event)}
+                className={isDragging ? "event-block dragging" : "event-block"}
+                {...drag.handlersFor(event)}
+                onClick={() => {
+                  if (!drag.shouldIgnoreClick()) {
+                    onEventClick(event);
+                  }
+                }}
                 style={{
                   top: startMinutes * PIXELS_PER_MINUTE,
-                  height: (endMinutes - startMinutes) * PIXELS_PER_MINUTE,
+                  height: durationMinutes * PIXELS_PER_MINUTE,
                   left: `${column * widthPercent}%`,
                   width: `${widthPercent}%`,
                   background: color.background,
@@ -63,7 +86,9 @@ export function DayView({ date, events, onEventClick }: DayViewProps) {
                 }}
               >
                 <span className="event-title">{event.title}</span>
-                <span className="event-time">{formatTimeRange(event.startTime, event.endTime)}</span>
+                <span className="event-time">
+                  {formatTimeRange(minutesToTime(startMinutes), minutesToTime(endMinutes))}
+                </span>
                 {event.repeat !== "none" && (
                   <span className="event-repeat" title={`Repeats ${event.repeat}`}>
                     <RepeatIcon />
