@@ -10,8 +10,14 @@ import { RepeatChoiceSheet } from "./components/RepeatChoiceSheet";
 import { addDays, minutesToTime, timeToMinutes, todayKey } from "./dateUtils";
 import type { CalendarEvent, EventInput, RepeatScope } from "./types";
 
-/** What the event form is doing: closed, creating a new event, or editing one. */
-type FormState = { mode: "closed" } | { mode: "create" } | { mode: "edit"; event: CalendarEvent };
+/**
+ * What the event form is doing: closed, creating a new event, or editing one.
+ * A new event made by tapping an empty hour starts at that hour.
+ */
+type FormState =
+  | { mode: "closed" }
+  | { mode: "create"; startHour?: number }
+  | { mode: "edit"; event: CalendarEvent };
 
 /** A repeating event that was dragged to a new time, waiting for the user to pick which days move. */
 interface PendingMove {
@@ -20,17 +26,24 @@ interface PendingMove {
   input: EventInput;
 }
 
-/** Starting values for a new event: the next full hour on the selected day, one hour long. */
-function newEventDefaults(date: string): EventInput {
-  const nextHour = date === todayKey() ? new Date().getHours() + 1 : 9;
-  // Keep the event inside the day.
-  const startHour = Math.min(nextHour, 22);
+/** The last minute of the day, as late as an event can end. */
+const END_OF_DAY_MINUTES = 23 * 60 + 59;
+
+/**
+ * Starting values for a new event, one hour long. It starts at `startHour` when given,
+ * otherwise at the next full hour on the selected day.
+ */
+function newEventDefaults(date: string, startHour?: number): EventInput {
+  // Keep the default event inside the day.
+  const nextHour = Math.min(date === todayKey() ? new Date().getHours() + 1 : 9, 22);
+  const startMinutes = (startHour ?? nextHour) * 60;
 
   return {
     title: "",
     date,
-    startTime: minutesToTime(startHour * 60),
-    endTime: minutesToTime((startHour + 1) * 60),
+    startTime: minutesToTime(startMinutes),
+    // An event at 11 PM ends at 11:59 PM, since the day has no 24:00.
+    endTime: minutesToTime(Math.min(startMinutes + 60, END_OF_DAY_MINUTES)),
     repeat: "none",
   };
 }
@@ -148,6 +161,7 @@ export function App() {
           events={events}
           onEventClick={(event) => setFormState({ mode: "edit", event })}
           onEventMove={moveEvent}
+          onEmptySlotClick={(hour) => setFormState({ mode: "create", startHour: hour })}
           onNextDay={() => setSelectedDate(addDays(selectedDate, 1))}
           onPreviousDay={() => setSelectedDate(addDays(selectedDate, -1))}
         />
@@ -168,7 +182,7 @@ export function App() {
           initialValues={
             formState.mode === "edit"
               ? editValues(formState.event, selectedDate)
-              : newEventDefaults(selectedDate)
+              : newEventDefaults(selectedDate, formState.startHour)
           }
           onSave={saveEvent}
           onDelete={deleteEvent}

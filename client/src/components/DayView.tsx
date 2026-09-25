@@ -7,6 +7,7 @@ import { useEventDrag } from "../useEventDrag";
 import { loadHourHeight, usePinchZoom } from "../usePinchZoom";
 import { useSwipe } from "../useSwipe";
 import { CurrentTimeLine } from "./CurrentTimeLine";
+import { HourSlots } from "./HourSlots";
 import { RepeatIcon } from "./Icons";
 
 /** The hour the view scrolls to when a day opens. */
@@ -20,6 +21,8 @@ interface DayViewProps {
   onEventClick: (event: CalendarEvent) => void;
   /** Called when an event is pressed, held and dragged to a new start time. */
   onEventMove: (event: CalendarEvent, startMinutes: number) => void;
+  /** Called when an empty part of the day is tapped, with the hour (0–23) that was tapped. */
+  onEmptySlotClick: (hour: number) => void;
   /** Swiping left shows the next day, swiping right the previous day. */
   onNextDay: () => void;
   onPreviousDay: () => void;
@@ -31,6 +34,7 @@ export function DayView({
   events,
   onEventClick,
   onEventMove,
+  onEmptySlotClick,
   onNextDay,
   onPreviousDay,
 }: DayViewProps) {
@@ -105,6 +109,8 @@ export function DayView({
         <CurrentTimeLine date={date} pixelsPerMinute={pixelsPerMinute} />
 
         <div className="events-area">
+          <HourSlots hourHeight={hourHeight} onSlotClick={onEmptySlotClick} />
+
           {layoutEvents(events).map((positioned) => {
             const { event, column, columnCount } = positioned;
             const color = colorForTitle(event.title);

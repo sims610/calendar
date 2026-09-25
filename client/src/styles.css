@@ -248,6 +248,19 @@ button {
   right: 0;
 }
 
+/* An empty hour you can tap to add an event there. Events are drawn over it. */
+.hour-slot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hour-slot:active {
+  background: rgba(0, 0, 0, 0.04);
+}
+
 .event-block {
   position: absolute;
   display: flex;
