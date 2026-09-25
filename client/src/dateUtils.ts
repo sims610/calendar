@@ -66,6 +66,11 @@ function splitTime(time: string): { clock: string; period: string } {
   };
 }
 
+/** 597 → "9:57" (no AM/PM, used by the current time line) */
+export function formatClock(totalMinutes: number): string {
+  return splitTime(minutesToTime(totalMinutes)).clock;
+}
+
 /** ("13:30", "14:30") → "1:30 – 2:30 PM";  ("11:00", "13:00") → "11:00 AM – 1:00 PM" */
 export function formatTimeRange(startTime: string, endTime: string): string {
   const start = splitTime(startTime);

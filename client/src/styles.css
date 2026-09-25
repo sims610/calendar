@@ -5,6 +5,7 @@
   --muted: #777;
   --line: #e6e6e6;
   --strip-background: #f1f1f1;
+  --now: #e0405a;
   --hour-label-width: 64px;
 
   font-family: Roboto, "Segoe UI", system-ui, sans-serif;
@@ -166,6 +167,38 @@ button {
 .hour-line {
   flex: 1;
   border-top: 1px solid var(--line);
+}
+
+/*
+ * The current time: a red line across the whole day with a time label above it.
+ * It comes before .events-area in the page, so events are drawn over the line.
+ */
+.current-time {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 2px solid var(--now);
+}
+
+/* Small black triangle on the left end of the line, pointing at the events. */
+.current-time::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -7px; /* centres the 12px triangle on the 2px line */
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 8px solid #000;
+}
+
+.current-time-label {
+  position: absolute;
+  bottom: 2px;
+  left: 14px;
+  padding: 0 2px;
+  background: #fff; /* keeps the hour label underneath from showing through */
+  font-size: 15px;
+  color: var(--now);
 }
 
 .events-area {

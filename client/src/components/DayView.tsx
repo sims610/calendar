@@ -3,6 +3,7 @@ import { colorForTitle } from "../eventColors";
 import { formatHour, formatTimeRange } from "../dateUtils";
 import { layoutEvents } from "../layoutEvents";
 import type { CalendarEvent } from "../types";
+import { CurrentTimeLine } from "./CurrentTimeLine";
 import { RepeatIcon } from "./Icons";
 
 /** Height of one hour in pixels. */
@@ -39,6 +40,8 @@ export function DayView({ date, events, onEventClick }: DayViewProps) {
             <span className="hour-line" />
           </div>
         ))}
+
+        <CurrentTimeLine date={date} pixelsPerMinute={PIXELS_PER_MINUTE} />
 
         <div className="events-area">
           {layoutEvents(events).map(({ event, startMinutes, endMinutes, column, columnCount }) => {
