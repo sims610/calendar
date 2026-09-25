@@ -6,7 +6,7 @@ import { DayView } from "./components/DayView";
 import { EventForm } from "./components/EventForm";
 import { Header } from "./components/Header";
 import { PlusIcon } from "./components/Icons";
-import { minutesToTime, timeToMinutes, todayKey } from "./dateUtils";
+import { addDays, minutesToTime, timeToMinutes, todayKey } from "./dateUtils";
 import type { CalendarEvent, EventInput } from "./types";
 
 /** What the event form is doing: closed, creating a new event, or editing one. */
@@ -99,6 +99,8 @@ export function App() {
           events={events}
           onEventClick={(event) => setFormState({ mode: "edit", event })}
           onEventMove={moveEvent}
+          onNextDay={() => setSelectedDate(addDays(selectedDate, 1))}
+          onPreviousDay={() => setSelectedDate(addDays(selectedDate, -1))}
         />
         <button
           className="fab"

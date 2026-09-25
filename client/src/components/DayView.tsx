@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { colorForTitle } from "../eventColors";
 import { formatHour, formatTimeRange, minutesToTime } from "../dateUtils";
 import { layoutEvents } from "../layoutEvents";
 import type { CalendarEvent } from "../types";
 import { useEventDrag } from "../useEventDrag";
+import { useSwipe } from "../useSwipe";
 import { CurrentTimeLine } from "./CurrentTimeLine";
 import { RepeatIcon } from "./Icons";
 
@@ -21,10 +22,20 @@ interface DayViewProps {
   onEventClick: (event: CalendarEvent) => void;
   /** Called when an event is pressed, held and dragged to a new start time. */
   onEventMove: (event: CalendarEvent, startMinutes: number) => void;
+  /** Swiping left shows the next day, swiping right the previous day. */
+  onNextDay: () => void;
+  onPreviousDay: () => void;
 }
 
 /** The scrolling timeline of hours with the day's events laid on top. */
-export function DayView({ date, events, onEventClick, onEventMove }: DayViewProps) {
+export function DayView({
+  date,
+  events,
+  onEventClick,
+  onEventMove,
+  onNextDay,
+  onPreviousDay,
+}: DayViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const drag = useEventDrag({
@@ -33,6 +44,29 @@ export function DayView({ date, events, onEventClick, onEventMove }: DayViewProp
     pixelsPerMinute: PIXELS_PER_MINUTE,
     onMove: onEventMove,
   });
+  const swipe = useSwipe({
+    onSwipeLeft: onNextDay,
+    onSwipeRight: onPreviousDay,
+    // Moving an event sideways shouldn't change the day.
+    isDisabled: drag.preview !== null,
+  });
+
+  // When the day changes, slide the new one in from the side it comes from:
+  // later days from the right, earlier days from the left.
+  const [shownDate, setShownDate] = useState(date);
+  const [slideInFrom, setSlideInFrom] = useState<"left" | "right" | null>(null);
+  if (date !== shownDate) {
+    setShownDate(date);
+    setSlideInFrom(date > shownDate ? "right" : "left");
+  }
+
+  const gridClassName = [
+    "day-view-grid",
+    slideInFrom && `slide-in-from-${slideInFrom}`,
+    swipe.isSwiping && "swiping",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   // Start each day scrolled to the morning instead of midnight.
   useEffect(() => {
@@ -42,8 +76,14 @@ export function DayView({ date, events, onEventClick, onEventMove }: DayViewProp
   }, [date]);
 
   return (
-    <div className="day-view" ref={scrollRef}>
-      <div className="day-view-grid" ref={gridRef} style={{ height: 24 * HOUR_HEIGHT }}>
+    <div className="day-view" ref={scrollRef} {...swipe.handlers}>
+      {/* The key gives each day a fresh element, so its slide-in animation plays. */}
+      <div
+        key={date}
+        className={gridClassName}
+        ref={gridRef}
+        style={{ height: 24 * HOUR_HEIGHT, transform: `translateX(${swipe.offsetX}px)` }}
+      >
         {HOURS.map((hour) => (
           <div key={hour} className="hour-row" style={{ top: hour * HOUR_HEIGHT }}>
             <span className="hour-label">{hour === 0 ? "" : formatHour(hour)}</span>

@@ -140,11 +140,50 @@ button {
 
 .day-view {
   height: 100%;
+  overflow-x: hidden; /* hides the day while it's pulled sideways by a swipe */
   overflow-y: auto;
+  touch-action: pan-y; /* the browser scrolls up and down; sideways swipes change the day */
 }
 
 .day-view-grid {
   position: relative;
+  transition: transform 200ms ease-out; /* springs back when a swipe is too short */
+}
+
+/* Follow the finger exactly while swiping. */
+.day-view-grid.swiping {
+  transition: none;
+}
+
+.day-view-grid.slide-in-from-right {
+  animation: slide-in-from-right 250ms ease-out;
+}
+
+.day-view-grid.slide-in-from-left {
+  animation: slide-in-from-left 250ms ease-out;
+}
+
+@keyframes slide-in-from-right {
+  from {
+    transform: translateX(40%);
+    opacity: 0;
+  }
+}
+
+@keyframes slide-in-from-left {
+  from {
+    transform: translateX(-40%);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .day-view-grid,
+  .day-view-grid.slide-in-from-right,
+  .day-view-grid.slide-in-from-left {
+    transition: none;
+    animation: none;
+  }
 }
 
 .hour-row {
