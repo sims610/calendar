@@ -431,3 +431,22 @@ button {
 .button-danger {
   color: #c62d3a;
 }
+
+/* ---------- Repeating event choice ---------- */
+
+.choice-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choice-buttons button {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.button-choice {
+  border: 1px solid #ccc;
+  text-align: left;
+}

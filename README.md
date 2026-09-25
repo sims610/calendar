@@ -7,7 +7,8 @@ so it can be installed to the home screen from the browser and works offline.
 ## Features
 - Day view with overlapping events shown side by side
 - Create, edit and delete events
-- Repeatable events (daily, weekly, monthly)
+- Repeatable events (daily, weekly, monthly). Changing, moving or deleting a repeat asks
+  whether it's for only that day or that day and every later one; earlier days never change.
 - Date picker in the header, and a button to jump back to today
 
 ## How data is stored
