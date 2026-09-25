@@ -6,6 +6,7 @@ so it can be installed to the home screen from the browser and works offline.
 
 ## Features
 - Day view with overlapping events shown side by side
+- Pinch the day to make hours shorter or taller; the size is remembered on the device
 - Create, edit and delete events
 - Repeatable events (daily, weekly, monthly). Changing, moving or deleting a repeat asks
   whether it's for only that day or that day and every later one; earlier days never change.

@@ -147,6 +147,8 @@ export function useEventDrag({ scrollRef, gridRef, pixelsPerMinute, onMove }: Us
       }
       // A touch drag doesn't always end in a click, so don't let an old flag eat this tap.
       ignoreNextClickRef.current = false;
+      // A second finger landing on another event replaces the first press.
+      endPress();
 
       const startMinutes = timeToMinutes(event.startTime);
       pressRef.current = {
@@ -213,5 +215,5 @@ export function useEventDrag({ scrollRef, gridRef, pixelsPerMinute, onMove }: Us
     return ignore;
   };
 
-  return { preview, handlersFor, shouldIgnoreClick };
+  return { preview, handlersFor, shouldIgnoreClick, cancel: endPress };
 }

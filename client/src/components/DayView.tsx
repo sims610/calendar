@@ -4,13 +4,11 @@ import { formatHour, formatTimeRange, minutesToTime } from "../dateUtils";
 import { layoutEvents } from "../layoutEvents";
 import type { CalendarEvent } from "../types";
 import { useEventDrag } from "../useEventDrag";
+import { loadHourHeight, usePinchZoom } from "../usePinchZoom";
 import { useSwipe } from "../useSwipe";
 import { CurrentTimeLine } from "./CurrentTimeLine";
 import { RepeatIcon } from "./Icons";
 
-/** Height of one hour in pixels. */
-const HOUR_HEIGHT = 88;
-const PIXELS_PER_MINUTE = HOUR_HEIGHT / 60;
 /** The hour the view scrolls to when a day opens. */
 const FIRST_VISIBLE_HOUR = 7;
 
@@ -38,17 +36,29 @@ export function DayView({
 }: DayViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  /** Height of one hour in pixels. Pinching changes it. */
+  const [hourHeight, setHourHeight] = useState(loadHourHeight);
+  const pixelsPerMinute = hourHeight / 60;
+
   const drag = useEventDrag({
     scrollRef,
     gridRef,
-    pixelsPerMinute: PIXELS_PER_MINUTE,
+    pixelsPerMinute,
     onMove: onEventMove,
+  });
+  const isPinching = usePinchZoom({
+    scrollRef,
+    hourHeight,
+    onHourHeightChange: setHourHeight,
+    isDisabled: drag.preview !== null,
+    // A second finger means a pinch, not a press and hold on an event.
+    onPinchStart: drag.cancel,
   });
   const swipe = useSwipe({
     onSwipeLeft: onNextDay,
     onSwipeRight: onPreviousDay,
-    // Moving an event sideways shouldn't change the day.
-    isDisabled: drag.preview !== null,
+    // Moving an event sideways or pinching shouldn't change the day.
+    isDisabled: drag.preview !== null || isPinching,
   });
 
   // When the day changes, slide the new one in from the side it comes from:
@@ -71,8 +81,9 @@ export function DayView({
   // Start each day scrolled to the morning instead of midnight.
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = FIRST_VISIBLE_HOUR * HOUR_HEIGHT - HOUR_HEIGHT / 2;
+      scrollRef.current.scrollTop = FIRST_VISIBLE_HOUR * hourHeight - hourHeight / 2;
     }
+    // Only when the day changes; pinching keeps its own scroll position.
   }, [date]);
 
   return (
@@ -82,16 +93,16 @@ export function DayView({
         key={date}
         className={gridClassName}
         ref={gridRef}
-        style={{ height: 24 * HOUR_HEIGHT, transform: `translateX(${swipe.offsetX}px)` }}
+        style={{ height: 24 * hourHeight, transform: `translateX(${swipe.offsetX}px)` }}
       >
         {HOURS.map((hour) => (
-          <div key={hour} className="hour-row" style={{ top: hour * HOUR_HEIGHT }}>
+          <div key={hour} className="hour-row" style={{ top: hour * hourHeight }}>
             <span className="hour-label">{hour === 0 ? "" : formatHour(hour)}</span>
             <span className="hour-line" />
           </div>
         ))}
 
-        <CurrentTimeLine date={date} pixelsPerMinute={PIXELS_PER_MINUTE} />
+        <CurrentTimeLine date={date} pixelsPerMinute={pixelsPerMinute} />
 
         <div className="events-area">
           {layoutEvents(events).map((positioned) => {
@@ -117,8 +128,8 @@ export function DayView({
                   }
                 }}
                 style={{
-                  top: startMinutes * PIXELS_PER_MINUTE,
-                  height: durationMinutes * PIXELS_PER_MINUTE,
+                  top: startMinutes * pixelsPerMinute,
+                  height: durationMinutes * pixelsPerMinute,
                   left: `${column * widthPercent}%`,
                   width: `${widthPercent}%`,
                   background: color.background,

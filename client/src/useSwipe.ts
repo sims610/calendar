@@ -57,7 +57,12 @@ export function useSwipe({ onSwipeLeft, onSwipeRight, isDisabled }: UseSwipeOpti
 
     onPointerMove: (pointerEvent: PointerEvent<HTMLElement>) => {
       const start = startRef.current;
-      if (!start || start.pointerId !== pointerEvent.pointerId || isDisabled) {
+      if (!start || start.pointerId !== pointerEvent.pointerId) {
+        return;
+      }
+      // Once another gesture (like a pinch) takes over, this touch can't become a swipe.
+      if (isDisabled) {
+        reset();
         return;
       }
 
