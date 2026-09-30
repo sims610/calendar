@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import * as storage from "./storage";
-import { BottomNav } from "./components/BottomNav";
+import { BottomNav, type Page } from "./components/BottomNav";
 import { DateStrip } from "./components/DateStrip";
 import { DayView } from "./components/DayView";
 import { EventForm } from "./components/EventForm";
 import { Header } from "./components/Header";
 import { PlusIcon } from "./components/Icons";
 import { RepeatChoiceSheet } from "./components/RepeatChoiceSheet";
+import { SettingsPage } from "./components/SettingsPage";
 import { addDays, minutesToTime, timeToMinutes, todayKey } from "./dateUtils";
 import type { CalendarEvent, EventInput, RepeatScope } from "./types";
 
@@ -61,6 +62,7 @@ function editValues(event: CalendarEvent, date: string): EventInput {
 }
 
 export function App() {
+  const [page, setPage] = useState<Page>("calendar");
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loadError, setLoadError] = useState("");
@@ -148,6 +150,15 @@ export function App() {
     loadEvents();
   };
 
+  if (page === "settings") {
+    return (
+      <div className="app">
+        <SettingsPage />
+        <BottomNav currentPage={page} onSelectPage={setPage} />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <Header selectedDate={selectedDate} onSelectDate={setSelectedDate} />
@@ -174,7 +185,7 @@ export function App() {
         </button>
       </main>
 
-      <BottomNav />
+      <BottomNav currentPage={page} onSelectPage={setPage} />
 
       {formState.mode !== "closed" && (
         <EventForm

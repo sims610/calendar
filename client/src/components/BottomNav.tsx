@@ -1,33 +1,42 @@
 import type { ReactNode } from "react";
-import { CalendarIcon, HomeIcon, MapPinIcon, PersonIcon, SyncIcon } from "./Icons";
+import { CalendarIcon, GearIcon, HomeIcon, MapPinIcon, PersonIcon } from "./Icons";
+
+export type Page = "calendar" | "settings";
 
 interface Tab {
   label: string;
   icon: ReactNode;
-  /** Only the Calendar tab works in the MVP. The others are shown greyed out. */
-  enabled: boolean;
+  /** The page the tab opens. Tabs without one aren't built yet and are shown greyed out. */
+  page?: Page;
 }
 
 const TABS: Tab[] = [
-  { label: "Home", icon: <HomeIcon />, enabled: false },
-  { label: "Calendar", icon: <CalendarIcon />, enabled: true },
-  { label: "People", icon: <PersonIcon />, enabled: false },
-  { label: "Map", icon: <MapPinIcon />, enabled: false },
-  { label: "Sync", icon: <SyncIcon />, enabled: false },
+  { label: "Home", icon: <HomeIcon /> },
+  { label: "Calendar", icon: <CalendarIcon />, page: "calendar" },
+  { label: "People", icon: <PersonIcon /> },
+  { label: "Map", icon: <MapPinIcon /> },
+  { label: "Settings", icon: <GearIcon />, page: "settings" },
 ];
 
-export function BottomNav() {
+interface BottomNavProps {
+  currentPage: Page;
+  onSelectPage: (page: Page) => void;
+}
+
+export function BottomNav({ currentPage, onSelectPage }: BottomNavProps) {
   return (
     <nav className="bottom-nav">
-      {TABS.map((tab) => (
+      {TABS.map(({ label, icon, page }) => (
         <button
-          key={tab.label}
-          className={tab.enabled ? "bottom-nav-tab active" : "bottom-nav-tab"}
-          disabled={!tab.enabled}
-          title={tab.enabled ? undefined : "Coming soon"}
+          key={label}
+          className={page === currentPage ? "bottom-nav-tab active" : "bottom-nav-tab"}
+          disabled={!page}
+          title={page ? undefined : "Coming soon"}
+          aria-current={page === currentPage ? "page" : undefined}
+          onClick={() => page && onSelectPage(page)}
         >
-          {tab.icon}
-          <span>{tab.label}</span>
+          {icon}
+          <span>{label}</span>
         </button>
       ))}
     </nav>
