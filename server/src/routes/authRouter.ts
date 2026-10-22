@@ -13,7 +13,7 @@ declare global {
   }
 }
 
-interface EndpointDoc {
+export interface EndpointDoc {
   method: string;
   path: string;
   requiresAuth: boolean;
@@ -64,10 +64,10 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 // Attaches req.user and req.token when the request carries a valid session token.
-function setAuthUser(req: Request, res: Response, next: NextFunction) {
+async function setAuthUser(req: Request, res: Response, next: NextFunction) {
   const token = readToken(req);
   if (token) {
-    const user = getUserByToken(token);
+    const user = await getUserByToken(token);
     if (user) {
       req.user = user;
       req.token = token;
@@ -96,7 +96,7 @@ authRouter.post('/', async (req: Request, res: Response) => {
     res.status(409).json({ message: 'email already registered' });
     return;
   }
-  const token = createSession(user.id);
+  const token = await createSession(user.id);
   res.status(201).json({ user, token });
 });
 
@@ -112,13 +112,13 @@ authRouter.put('/', async (req: Request, res: Response) => {
     res.status(401).json({ message: 'invalid email or password' });
     return;
   }
-  const token = createSession(user.id);
+  const token = await createSession(user.id);
   res.json({ user, token });
 });
 
 // logout
-authRouter.delete('/', authenticateToken, (req: Request, res: Response) => {
-  deleteSession(req.token!);
+authRouter.delete('/', authenticateToken, async (req: Request, res: Response) => {
+  await deleteSession(req.token!);
   res.json({ message: 'logout successful' });
 });
 

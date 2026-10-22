@@ -1,6 +1,7 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { authRouter, setAuthUser } from './routes/authRouter.ts';
+import { eventRouter } from './routes/eventRouter.ts';
 
 interface HttpError extends Error {
   statusCode?: number;
@@ -20,10 +21,11 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 const apiRouter = express.Router();
 app.use('/api', apiRouter);
 apiRouter.use('/auth', authRouter);
+apiRouter.use('/event', eventRouter);
 
 apiRouter.use('/docs', (req: Request, res: Response) => {
   res.json({
-    endpoints: [...authRouter.docs],
+    endpoints: [...authRouter.docs, ...eventRouter.docs],
   });
 });
 

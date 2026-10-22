@@ -17,8 +17,21 @@ Events are saved on the user's device in the browser's IndexedDB database. There
 server or account, and events do not sync between devices. Clearing the browser's site data
 deletes them.
 
+The server (`server/`) stores users, sessions and events in MySQL. The app doesn't use it yet.
+
 ## Project layout
 - `client/` — the app: React + TypeScript, built with Vite
+- `server/` — the API: Express + TypeScript, backed by MySQL
+
+## Running the server
+Copy `server/.env.example` to `server/.env` and fill in your MySQL login. On startup the server
+creates the database and its tables if they don't exist.
+```
+cd server
+npm install
+npm run dev
+```
+`GET /api/docs` lists every endpoint with an example.
 
 ## Getting started
 ```
