@@ -25,14 +25,23 @@ export interface EventInput {
   repeat: RepeatRule;
 }
 
-/** Same shape as the client's CalendarEvent. */
+/** Same shape as the client's CalendarEvent, minus the fields that only matter on a device. */
 export interface CalendarEvent extends EventInput {
   id: number;
   /** The last day a repeating event happens. Missing means it repeats forever. */
   endDate?: string;
   /** Days a repeating event is skipped, because that day was deleted or changed on its own. */
   excludedDates?: string[];
+  /** The id every device knows the event by. The numeric id is only this database's. */
+  clientId: string;
+  /** When the event last changed, in ms. The newer copy wins when two devices change it. */
+  updatedAt: number;
+  /** Deleted events are kept as markers so other devices find out about the delete. */
+  deleted: boolean;
 }
+
+/** An event as a device sends and receives it when syncing. */
+export type SyncedEvent = Omit<CalendarEvent, 'id'>;
 
 const config = {
   host: process.env.DB_HOST ?? 'localhost',
@@ -64,9 +73,12 @@ const tableStatements = [
     FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
   )`,
   // "repeat" is a reserved word in MySQL, so the column is repeatRule.
+  // changedAt is the server's clock, so devices can ask for "everything since" without trusting
+  // their own clocks. updatedAt is the device's clock and only decides which change wins.
   `CREATE TABLE IF NOT EXISTS events (
     id INT AUTO_INCREMENT PRIMARY KEY,
     userId CHAR(36) NOT NULL,
+    clientId CHAR(36) NOT NULL,
     title VARCHAR(255) NOT NULL,
     date DATE NOT NULL,
     startTime TIME NOT NULL,
@@ -74,8 +86,13 @@ const tableStatements = [
     repeatRule ENUM('none', 'daily', 'weekly', 'monthly') NOT NULL,
     endDate DATE NULL,
     excludedDates JSON NOT NULL,
+    updatedAt BIGINT NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    changedAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX (userId, date)
+    UNIQUE (userId, clientId),
+    INDEX (userId, date),
+    INDEX (userId, changedAt)
   )`,
 ];
 
@@ -155,7 +172,8 @@ export async function deleteSession(token: string): Promise<void> {
   await db().execute('DELETE FROM sessions WHERE token = ?', [token]);
 }
 
-const eventColumns = 'id, title, date, startTime, endTime, repeatRule, endDate, excludedDates';
+const eventColumns =
+  'id, clientId, title, date, startTime, endTime, repeatRule, endDate, excludedDates, updatedAt, deleted';
 
 function toEvent(row: RowDataPacket): CalendarEvent {
   const event: CalendarEvent = {
@@ -166,6 +184,11 @@ function toEvent(row: RowDataPacket): CalendarEvent {
     startTime: row.startTime.slice(0, 5),
     endTime: row.endTime.slice(0, 5),
     repeat: row.repeatRule,
+    clientId: row.clientId,
+    // BIGINT can come back as a string; ms timestamps always fit in a JS number.
+    updatedAt: Number(row.updatedAt),
+    // BOOLEAN is TINYINT(1) in MySQL, so it comes back as 0 or 1.
+    deleted: Boolean(row.deleted),
   };
   if (row.endDate) {
     event.endDate = row.endDate;
@@ -191,10 +214,11 @@ async function insertEvent(
   excludedDates: string[] = [],
 ): Promise<number> {
   const [result] = await connection.execute<ResultSetHeader>(
-    `INSERT INTO events (userId, title, date, startTime, endTime, repeatRule, endDate, excludedDates)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO events (userId, clientId, title, date, startTime, endTime, repeatRule, endDate, excludedDates, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       userId,
+      randomUUID(),
       input.title,
       input.date,
       input.startTime,
@@ -202,6 +226,7 @@ async function insertEvent(
       input.repeat,
       endDate,
       JSON.stringify(excludedDates),
+      Date.now(),
     ],
   );
   return result.insertId;
@@ -212,6 +237,7 @@ export async function getEventsForDay(userId: string, date: string): Promise<Cal
   const [rows] = await db().execute<RowDataPacket[]>(
     `SELECT ${eventColumns} FROM events
      WHERE userId = ?
+       AND deleted = FALSE
        AND date <= ?
        AND (endDate IS NULL OR endDate >= ?)
        AND NOT JSON_CONTAINS(excludedDates, JSON_QUOTE(?))
@@ -229,7 +255,8 @@ export async function getEventsForDay(userId: string, date: string): Promise<Cal
 
 export async function createEvent(userId: string, input: EventInput): Promise<CalendarEvent> {
   const id = await insertEvent(db(), userId, input);
-  return { id, ...input };
+  const [rows] = await db().execute<RowDataPacket[]>(`SELECT ${eventColumns} FROM events WHERE id = ?`, [id]);
+  return toEvent(rows[0]);
 }
 
 /**
@@ -245,7 +272,7 @@ async function withEvent(
   try {
     await connection.beginTransaction();
     const [rows] = await connection.execute<RowDataPacket[]>(
-      `SELECT ${eventColumns} FROM events WHERE id = ? AND userId = ? FOR UPDATE`,
+      `SELECT ${eventColumns} FROM events WHERE id = ? AND userId = ? AND deleted = FALSE FOR UPDATE`,
       [eventId, userId],
     );
     if (rows.length === 0) {
@@ -284,21 +311,23 @@ export async function updateEvent(
     const excludedDates = event.excludedDates ?? [];
 
     if (scope === 'only-this') {
-      await connection.execute('UPDATE events SET excludedDates = ? WHERE id = ?', [
+      await connection.execute('UPDATE events SET excludedDates = ?, updatedAt = ? WHERE id = ?', [
         JSON.stringify([...excludedDates, occurrenceDate]),
+        Date.now(),
         event.id,
       ]);
       await insertEvent(connection, userId, { ...input, repeat: 'none' });
     } else if (occurrenceDate === event.date) {
       // Changing from the very first day changes the whole series.
       await connection.execute(
-        'UPDATE events SET title = ?, date = ?, startTime = ?, endTime = ?, repeatRule = ? WHERE id = ?',
-        [input.title, input.date, input.startTime, input.endTime, input.repeat, event.id],
+        'UPDATE events SET title = ?, date = ?, startTime = ?, endTime = ?, repeatRule = ?, updatedAt = ? WHERE id = ?',
+        [input.title, input.date, input.startTime, input.endTime, input.repeat, Date.now(), event.id],
       );
     } else {
-      await connection.execute('UPDATE events SET endDate = ?, excludedDates = ? WHERE id = ?', [
+      await connection.execute('UPDATE events SET endDate = ?, excludedDates = ?, updatedAt = ? WHERE id = ?', [
         addDays(occurrenceDate, -1),
         JSON.stringify(excludedDates.filter((date) => date < occurrenceDate)),
+        Date.now(),
         event.id,
       ]);
       await insertEvent(
@@ -325,18 +354,97 @@ export async function deleteEvent(
 ): Promise<boolean> {
   return withEvent(userId, eventId, async (connection, event) => {
     if (scope === 'only-this') {
-      await connection.execute('UPDATE events SET excludedDates = ? WHERE id = ?', [
+      await connection.execute('UPDATE events SET excludedDates = ?, updatedAt = ? WHERE id = ?', [
         JSON.stringify([...(event.excludedDates ?? []), occurrenceDate]),
+        Date.now(),
         event.id,
       ]);
     } else if (occurrenceDate === event.date) {
-      // Deleting from the very first day deletes the whole series.
-      await connection.execute('DELETE FROM events WHERE id = ?', [event.id]);
+      // Deleting from the very first day deletes the whole series. The row stays as a marker
+      // so other devices find out about the delete when they sync.
+      await connection.execute('UPDATE events SET deleted = TRUE, updatedAt = ? WHERE id = ?', [
+        Date.now(),
+        event.id,
+      ]);
     } else {
-      await connection.execute('UPDATE events SET endDate = ? WHERE id = ?', [
+      await connection.execute('UPDATE events SET endDate = ?, updatedAt = ? WHERE id = ?', [
         addDays(occurrenceDate, -1),
+        Date.now(),
         event.id,
       ]);
     }
   });
+}
+
+/** What a sync sends back: the user's events that changed since the device last synced. */
+export interface SyncResult {
+  events: SyncedEvent[];
+  /** Pass this as `since` next time. Null while the user has no events. */
+  cursor: string | null;
+}
+
+/**
+ * Saves the device's changed events, then returns every event of the user's that changed after
+ * `since` (a cursor from an earlier sync), or all of them when `since` is null.
+ *
+ * Events are matched by clientId, so sending the same events again changes nothing. When an
+ * event already exists, the copy with the newer updatedAt wins.
+ */
+export async function syncEvents(userId: string, events: SyncedEvent[], since: string | null): Promise<SyncResult> {
+  const connection = await db().getConnection();
+  try {
+    await connection.beginTransaction();
+    for (const event of events) {
+      // Each column only takes the incoming value when the incoming copy is newer.
+      // updatedAt is assigned last because MySQL applies these assignments left to right.
+      await connection.execute(
+        `INSERT INTO events
+           (userId, clientId, title, date, startTime, endTime, repeatRule, endDate, excludedDates, updatedAt, deleted)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS incoming
+         ON DUPLICATE KEY UPDATE
+           title = IF(incoming.updatedAt > events.updatedAt, incoming.title, events.title),
+           date = IF(incoming.updatedAt > events.updatedAt, incoming.date, events.date),
+           startTime = IF(incoming.updatedAt > events.updatedAt, incoming.startTime, events.startTime),
+           endTime = IF(incoming.updatedAt > events.updatedAt, incoming.endTime, events.endTime),
+           repeatRule = IF(incoming.updatedAt > events.updatedAt, incoming.repeatRule, events.repeatRule),
+           endDate = IF(incoming.updatedAt > events.updatedAt, incoming.endDate, events.endDate),
+           excludedDates = IF(incoming.updatedAt > events.updatedAt, incoming.excludedDates, events.excludedDates),
+           deleted = IF(incoming.updatedAt > events.updatedAt, incoming.deleted, events.deleted),
+           updatedAt = GREATEST(incoming.updatedAt, events.updatedAt)`,
+        [
+          userId,
+          event.clientId,
+          event.title,
+          event.date,
+          event.startTime,
+          event.endTime,
+          event.repeat,
+          event.endDate ?? null,
+          JSON.stringify(event.excludedDates ?? []),
+          event.updatedAt,
+          event.deleted,
+        ],
+      );
+    }
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  const [rows] = await db().execute<RowDataPacket[]>(
+    `SELECT ${eventColumns}, changedAt FROM events
+     WHERE userId = ? AND (? IS NULL OR changedAt > ?)
+     ORDER BY changedAt`,
+    [userId, since, since],
+  );
+  const changed = rows.map((row) => {
+    const { id, ...event } = toEvent(row);
+    return event;
+  });
+  // The newest change returned is where the next sync picks up.
+  const cursor = rows.length > 0 ? rows[rows.length - 1].changedAt : since;
+  return { events: changed, cursor };
 }

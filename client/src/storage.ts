@@ -1,5 +1,7 @@
 // Stores events on the device using IndexedDB, the browser's built-in database.
-// Nothing leaves the user's browser, so no server is needed.
+// Each event carries what's needed to sync it with an account later: an id shared across devices
+// (clientId), who owns it, when it last changed, and whether it still has to be uploaded.
+// Deleting keeps the event as a marker so the delete can sync too.
 
 import { openDB, type DBSchema } from "idb";
 import { addDays, fromDateKey } from "./dateUtils";
@@ -12,10 +14,32 @@ interface CalendarDatabase extends DBSchema {
   };
 }
 
-// Opened once and shared. Creates the "events" store the first time the app runs.
-const databasePromise = openDB<CalendarDatabase>("calendar", 1, {
-  upgrade(database) {
-    database.createObjectStore("events", { keyPath: "id", autoIncrement: true });
+/** The owner of events made while signed out. Accounts aren't connected yet, so that's all of them. */
+const SIGNED_OUT_OWNER = "";
+
+// Opened once and shared.
+// Version 1 created the "events" store. Version 2 added the sync fields to every event.
+const databasePromise = openDB<CalendarDatabase>("calendar", 2, {
+  async upgrade(database, oldVersion, _newVersion, transaction) {
+    if (oldVersion < 1) {
+      database.createObjectStore("events", { keyPath: "id", autoIncrement: true });
+    }
+    if (oldVersion < 2) {
+      // Events saved before syncing existed belong to whoever uses this device, and have
+      // never been uploaded.
+      let cursor = await transaction.objectStore("events").openCursor();
+      while (cursor) {
+        cursor.update({
+          ...cursor.value,
+          clientId: crypto.randomUUID(),
+          ownerUserId: SIGNED_OUT_OWNER,
+          updatedAt: Date.now(),
+          deleted: false,
+          dirty: true,
+        });
+        cursor = await cursor.continue();
+      }
+    }
   },
 });
 
@@ -51,13 +75,33 @@ function occursOn(event: CalendarEvent, dateKey: string): boolean {
 export async function getEventsForDay(date: string): Promise<CalendarEvent[]> {
   const database = await databasePromise;
   const allEvents = await database.getAll("events");
-  return allEvents.filter((event) => occursOn(event, date));
+  return allEvents.filter(
+    (event) => !event.deleted && event.ownerUserId === SIGNED_OUT_OWNER && occursOn(event, date),
+  );
+}
+
+type SyncFields = "clientId" | "ownerUserId" | "updatedAt" | "deleted" | "dirty";
+
+/** A brand-new event for `ownerUserId`. IndexedDB fills in the id because the store uses autoIncrement. */
+function newEvent(details: Omit<CalendarEvent, SyncFields | "id">, ownerUserId: string): CalendarEvent {
+  return {
+    ...details,
+    clientId: crypto.randomUUID(),
+    ownerUserId,
+    updatedAt: Date.now(),
+    deleted: false,
+    dirty: true,
+  } as CalendarEvent;
+}
+
+/** The event with `changes` applied, marked as changed now and waiting to be uploaded. */
+function changed(event: CalendarEvent, changes: Partial<CalendarEvent>): CalendarEvent {
+  return { ...event, ...changes, updatedAt: Date.now(), dirty: true };
 }
 
 export async function createEvent(input: EventInput): Promise<void> {
   const database = await databasePromise;
-  // IndexedDB fills in the id because the store uses autoIncrement.
-  await database.add("events", detailsOf(input) as CalendarEvent);
+  await database.add("events", newEvent(detailsOf(input), SIGNED_OUT_OWNER));
 }
 
 /** Just the details the user edits, without any of the repeat bookkeeping. */
@@ -86,22 +130,28 @@ export async function updateEvent(
   const excludedDates = event.excludedDates ?? [];
 
   if (scope === "only-this") {
-    transaction.store.put({ ...event, excludedDates: [...excludedDates, occurrenceDate] });
-    transaction.store.add({ ...detailsOf(input), repeat: "none" } as CalendarEvent);
+    transaction.store.put(changed(event, { excludedDates: [...excludedDates, occurrenceDate] }));
+    transaction.store.add(newEvent({ ...detailsOf(input), repeat: "none" }, event.ownerUserId));
   } else if (occurrenceDate === event.date) {
     // Changing from the very first day changes the whole series.
-    transaction.store.put({ ...event, ...detailsOf(input) });
+    transaction.store.put(changed(event, detailsOf(input)));
   } else {
-    transaction.store.put({
-      ...event,
-      endDate: addDays(occurrenceDate, -1),
-      excludedDates: excludedDates.filter((date) => date < occurrenceDate),
-    });
-    transaction.store.add({
-      ...detailsOf(input),
-      endDate: event.endDate,
-      excludedDates: excludedDates.filter((date) => date >= occurrenceDate),
-    } as CalendarEvent);
+    transaction.store.put(
+      changed(event, {
+        endDate: addDays(occurrenceDate, -1),
+        excludedDates: excludedDates.filter((date) => date < occurrenceDate),
+      }),
+    );
+    transaction.store.add(
+      newEvent(
+        {
+          ...detailsOf(input),
+          endDate: event.endDate,
+          excludedDates: excludedDates.filter((date) => date >= occurrenceDate),
+        },
+        event.ownerUserId,
+      ),
+    );
   }
 
   await transaction.done;
@@ -120,11 +170,12 @@ export async function deleteEvent(
 
   if (scope === "only-this") {
     const excludedDates = [...(event.excludedDates ?? []), occurrenceDate];
-    await database.put("events", { ...event, excludedDates });
+    await database.put("events", changed(event, { excludedDates }));
   } else if (occurrenceDate === event.date) {
-    // Deleting from the very first day deletes the whole series.
-    await database.delete("events", event.id);
+    // Deleting from the very first day deletes the whole series. It's kept as a marker
+    // so the delete can reach the server.
+    await database.put("events", changed(event, { deleted: true }));
   } else {
-    await database.put("events", { ...event, endDate: addDays(occurrenceDate, -1) });
+    await database.put("events", changed(event, { endDate: addDays(occurrenceDate, -1) }));
   }
 }
