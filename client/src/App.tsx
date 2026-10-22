@@ -163,7 +163,7 @@ export function App() {
   if (page === "settings") {
     return (
       <div className="app">
-        <SettingsPage />
+        <SettingsPage onGoToSignIn={() => setPage("home")} />
         <BottomNav currentPage={page} onSelectPage={setPage} />
       </div>
     );
