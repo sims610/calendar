@@ -382,6 +382,15 @@ button {
   letter-spacing: 0.3px;
 }
 
+.settings-section {
+  margin-top: 28px;
+}
+
+.settings-placeholder {
+  margin: 0;
+  color: var(--muted);
+}
+
 .color-options {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));

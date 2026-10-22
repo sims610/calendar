@@ -39,6 +39,11 @@ export function SettingsPage() {
             })}
           </div>
         </section>
+
+        <section className="settings-section">
+          <h2 className="settings-heading">Notifications</h2>
+          <p className="settings-placeholder">Coming soon</p>
+        </section>
       </main>
     </div>
   );
