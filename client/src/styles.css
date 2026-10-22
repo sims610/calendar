@@ -603,3 +603,38 @@ button {
   font-size: 14px;
   color: var(--theme);
 }
+
+/* ---------- New version notice ---------- */
+
+/* Sits just above the bottom navigation, on every page. */
+.update-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: calc(100% - 32px);
+  max-width: 608px; /* the app's 640px minus the side margins */
+  padding: 12px 12px 12px 16px;
+  transform: translateX(-50%);
+  border-radius: 8px;
+  background: #323232;
+  color: #fff;
+  font-size: 15px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.update-toast span {
+  flex: 1;
+}
+
+.update-toast-button {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--theme);
+  color: #fff;
+  font-weight: 500;
+}

@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      // A new version downloads in the background but waits until the user taps Reload
+      // (see UpdatePrompt.tsx), so the app never changes under them.
+      registerType: "prompt",
       manifest: {
         name: "Calendar",
         short_name: "Calendar",
