@@ -5,6 +5,7 @@ import { DateStrip } from "./components/DateStrip";
 import { DayView } from "./components/DayView";
 import { EventForm } from "./components/EventForm";
 import { Header } from "./components/Header";
+import { HomePage } from "./components/HomePage";
 import { PlusIcon } from "./components/Icons";
 import { RepeatChoiceSheet } from "./components/RepeatChoiceSheet";
 import { SettingsPage } from "./components/SettingsPage";
@@ -149,6 +150,15 @@ export function App() {
     // Put the event back at its saved time.
     loadEvents();
   };
+
+  if (page === "home") {
+    return (
+      <div className="app">
+        <HomePage />
+        <BottomNav currentPage={page} onSelectPage={setPage} />
+      </div>
+    );
+  }
 
   if (page === "settings") {
     return (

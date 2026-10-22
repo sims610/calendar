@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CalendarIcon, GearIcon, HomeIcon, MapPinIcon, PersonIcon } from "./Icons";
 
-export type Page = "calendar" | "settings";
+export type Page = "home" | "calendar" | "settings";
 
 interface Tab {
   label: string;
@@ -11,7 +11,7 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { label: "Home", icon: <HomeIcon /> },
+  { label: "Home", icon: <HomeIcon />, page: "home" },
   { label: "Calendar", icon: <CalendarIcon />, page: "calendar" },
   { label: "People", icon: <PersonIcon /> },
   { label: "Map", icon: <MapPinIcon /> },
