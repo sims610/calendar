@@ -55,7 +55,7 @@ export function UpdatePrompt() {
     <div className="update-toast" role="status">
       <span>A new version of Calendar is available</span>
       <button type="button" className="update-toast-button" onClick={reload}>
-        Reload
+        Refresh
       </button>
     </div>
   );
