@@ -83,7 +83,6 @@ jobs:
         id: build-image
         env:
           IMAGE: ${{ steps.login-ecr.outputs.registry }}/calendar-service
-          VERSION: ${{ needs.build.outputs.version }}
         run: |
-          docker build --platform=linux/arm64 -t "$IMAGE:$VERSION" -t "$IMAGE:latest" --push server
-          echo "image=$IMAGE:$VERSION" >> "$GITHUB_OUTPUT"
+          docker build --platform=linux/arm64 -t "$IMAGE:latest" --push server
+          echo "image=$IMAGE:latest" >> "$GITHUB_OUTPUT"
