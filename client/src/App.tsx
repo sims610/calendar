@@ -10,6 +10,7 @@ import { PlusIcon } from "./components/Icons";
 import { RepeatChoiceSheet } from "./components/RepeatChoiceSheet";
 import { SettingsPage } from "./components/SettingsPage";
 import { addDays, minutesToTime, timeToMinutes, todayKey } from "./dateUtils";
+import { scheduleReminders } from "./notifications";
 import type { CalendarEvent, EventInput, RepeatScope } from "./types";
 
 /**
@@ -74,6 +75,8 @@ export function App() {
     try {
       setEvents(await storage.getEventsForDay(selectedDate));
       setLoadError("");
+      // This runs after every change to events, so reminders follow them.
+      scheduleReminders();
     } catch {
       setLoadError("Couldn't load your events.");
     }

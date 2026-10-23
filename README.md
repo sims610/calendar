@@ -11,6 +11,9 @@ so it can be installed to the home screen from the browser and works offline.
 - Repeatable events (daily, weekly, monthly). Changing, moving or deleting a repeat asks
   whether it's for only that day or that day and every later one; earlier days never change.
 - Date picker in the header, and a button to jump back to today
+- Event reminders (at the start, or 5, 15 or 30 minutes before), chosen in Settings. Only
+  offered in the installed app. Reminders are timed on the device, so they show while the app
+  is running or when it next wakes, but not while it's fully closed.
 
 ## How data is stored
 Events are saved on the user's device in the browser's IndexedDB database. There is no
