@@ -1,0 +1,5 @@
+# Keep secrets and local builds out of the image.
+.env
+node_modules
+dist
+*.log

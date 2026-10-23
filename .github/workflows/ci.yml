@@ -36,6 +36,7 @@ jobs:
         uses: actions/upload-pages-artifact@v5.0.0
         with:
           path: client/dist/
+
   deploy:
     needs: build
     permissions:
@@ -49,3 +50,40 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5.0.1
+
+  push-image:
+    name: Push server image to ECR
+    needs: build
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Create OIDC token to AWS
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          audience: sts.amazonaws.com
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT }}:role/${{ secrets.CI_IAM_ROLE }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up machine emulation
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker build
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push container image
+        id: build-image
+        env:
+          IMAGE: ${{ steps.login-ecr.outputs.registry }}/calendar-service
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          docker build --platform=linux/arm64 -t "$IMAGE:$VERSION" -t "$IMAGE:latest" --push server
+          echo "image=$IMAGE:$VERSION" >> "$GITHUB_OUTPUT"
