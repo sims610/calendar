@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import mysql from 'mysql2/promise';
+import appConfig from '../config.js';
 import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
 export interface User {
@@ -43,13 +44,7 @@ export interface CalendarEvent extends EventInput {
 /** An event as a device sends and receives it when syncing. */
 export type SyncedEvent = Omit<CalendarEvent, 'id'>;
 
-const config = {
-  host: process.env.DB_HOST ?? 'localhost',
-  port: Number(process.env.DB_PORT ?? 3306),
-  user: process.env.DB_USER ?? 'root',
-  password: process.env.DB_PASSWORD ?? '',
-  database: process.env.DB_NAME ?? 'calendar',
-};
+const config = appConfig.db.connection;
 
 let pool: Pool | undefined;
 

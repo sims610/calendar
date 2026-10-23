@@ -9,6 +9,7 @@
     "strict": true,
     "skipLibCheck": true,
     "sourceMap": true,
+    "allowJs": true,
 
     // Keep source runnable by Node's built-in type stripping (node src/index.ts)
     "erasableSyntaxOnly": true,

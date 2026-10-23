@@ -10,7 +10,7 @@ COPY src ./src
 RUN npm run build
 
 # Run: only the compiled code and the packages it needs at runtime.
-# Settings (DB_HOST, DB_PASSWORD, ...) come from environment variables when the container starts.
+# Database settings come from src/config.js, which CI writes from the GitHub secrets.
 FROM node:${NODE_VERSION}-alpine
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
