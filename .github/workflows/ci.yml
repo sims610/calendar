@@ -108,3 +108,7 @@ jobs:
         run: |
           docker build --platform=linux/arm64 -t "$IMAGE:latest" --push server
           echo "image=$IMAGE:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy new container
+        run: |
+          aws ecs update-service --cluster calendar-service --service calendar-service --force-new-deployment
