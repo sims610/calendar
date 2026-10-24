@@ -1,11 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  clearAccount,
+  clearSyncCursor,
+  getSavedAccount,
+  saveAccount,
+  type Account,
+} from "./account";
+import * as api from "./api";
 import * as storage from "./storage";
+import { sync } from "./sync";
 import { BottomNav, type Page } from "./components/BottomNav";
 import { DateStrip } from "./components/DateStrip";
 import { DayView } from "./components/DayView";
 import { EventForm } from "./components/EventForm";
 import { Header } from "./components/Header";
 import { HomePage } from "./components/HomePage";
+import { MigratePrompt } from "./components/MigratePrompt";
 import { PlusIcon } from "./components/Icons";
 import { RepeatChoiceSheet } from "./components/RepeatChoiceSheet";
 import { SettingsPage } from "./components/SettingsPage";
@@ -69,6 +79,9 @@ export function App() {
   const [loadError, setLoadError] = useState("");
   const [formState, setFormState] = useState<FormState>({ mode: "closed" });
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+  const [account, setAccount] = useState(getSavedAccount);
+  /** Events made while signed out, offered to the account that just signed in. 0 hides the offer. */
+  const [anonymousCount, setAnonymousCount] = useState(0);
 
   const loadEvents = useCallback(async () => {
     try {
@@ -77,11 +90,75 @@ export function App() {
     } catch {
       setLoadError("Couldn't load your events.");
     }
-  }, [selectedDate]);
+    // Storage shows the signed-in user's events, so load again when that changes.
+  }, [selectedDate, account]);
 
   useEffect(() => {
     loadEvents();
   }, [loadEvents]);
+
+  // Syncs finish in the background, so they reload with whatever day is showing by then.
+  const loadEventsRef = useRef(loadEvents);
+  loadEventsRef.current = loadEvents;
+
+  /** Syncs in the background and shows anything that came from other devices. */
+  const syncInBackground = useCallback(async () => {
+    if (await sync()) {
+      await loadEventsRef.current();
+    }
+  }, []);
+
+  // Sync on start, when the connection comes back, and when the app is brought back to the
+  // front, which is when changes from other devices are most likely waiting.
+  useEffect(() => {
+    syncInBackground();
+    const syncWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        syncInBackground();
+      }
+    };
+    window.addEventListener("online", syncInBackground);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    return () => {
+      window.removeEventListener("online", syncInBackground);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+    };
+  }, [syncInBackground]);
+
+  const signedIn = async (newAccount: Account) => {
+    saveAccount(newAccount);
+    setAccount(newAccount);
+    setPage("calendar");
+    syncInBackground();
+    setAnonymousCount(await storage.countAnonymousEvents());
+  };
+
+  const addAnonymousEvents = async () => {
+    setAnonymousCount(0);
+    if (account) {
+      await storage.claimAnonymousEvents(account.user.id);
+      await loadEvents();
+      syncInBackground();
+    }
+  };
+
+  const signOut = async () => {
+    if (!account) {
+      return;
+    }
+    // Upload anything not yet saved, so signing out doesn't lose it.
+    await sync();
+    if ((await storage.getDirtyEvents(account.user.id)).length > 0) {
+      setLoadError("Couldn't save your latest changes. Connect to the internet and try again.");
+      return;
+    }
+    // The session is forgotten here either way; the server dropping it too is just tidier.
+    api.signOut(account.token).catch(() => {});
+    clearAccount();
+    clearSyncCursor(account.user.id);
+    await storage.clearUserEvents(account.user.id);
+    setAccount(null);
+  };
 
   const closeForm = () => setFormState({ mode: "closed" });
 
@@ -93,6 +170,7 @@ export function App() {
     }
     closeForm();
     await loadEvents();
+    syncInBackground();
   };
 
   const deleteEvent = async (scope: RepeatScope) => {
@@ -101,6 +179,7 @@ export function App() {
     }
     closeForm();
     await loadEvents();
+    syncInBackground();
   };
 
   const saveMove = async ({ event, input }: PendingMove, scope: RepeatScope) => {
@@ -108,6 +187,7 @@ export function App() {
       await storage.updateEvent(event, selectedDate, input, scope);
       // Moving part of a series creates new events, so reload to show them.
       await loadEvents();
+      syncInBackground();
     } catch {
       // Put the event back where it was saved, then explain why.
       await loadEvents();
@@ -151,11 +231,20 @@ export function App() {
     loadEvents();
   };
 
+  const migratePrompt = anonymousCount > 0 && (
+    <MigratePrompt
+      count={anonymousCount}
+      onAdd={addAnonymousEvents}
+      onNotNow={() => setAnonymousCount(0)}
+    />
+  );
+
   if (page === "home") {
     return (
       <div className="app">
-        <HomePage />
+        <HomePage account={account} onSignedIn={signedIn} />
         <BottomNav currentPage={page} onSelectPage={setPage} />
+        {migratePrompt}
       </div>
     );
   }
@@ -163,7 +252,8 @@ export function App() {
   if (page === "settings") {
     return (
       <div className="app">
-        <SettingsPage onGoToSignIn={() => setPage("home")} />
+        {loadError && <div className="error-banner">{loadError}</div>}
+        <SettingsPage account={account} onGoToSignIn={() => setPage("home")} onSignOut={signOut} />
         <BottomNav currentPage={page} onSelectPage={setPage} />
       </div>
     );
@@ -218,6 +308,8 @@ export function App() {
           onCancel={cancelMove}
         />
       )}
+
+      {migratePrompt}
     </div>
   );
 }

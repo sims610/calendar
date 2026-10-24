@@ -28,6 +28,8 @@ jobs:
           printf '{"version": "%s" }' "$version" > client/public/version.json
 
       - name: Build
+        env:
+          VITE_API_URL: https://calendar-service.byucanadian.click
         run: |
           npm ci && npm run build
           cp client/dist/index.html client/dist/404.html
