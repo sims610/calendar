@@ -1,10 +1,10 @@
 // Event reminders, chosen in Settings. Only offered in the installed app: phones only allow
 // notifications from web apps added to the home screen.
 //
-// Events only live on this device, so reminders are timed on the device too, while the app is
-// running. Notifications go through the service worker, because Android doesn't allow pages to
-// show them directly. Reminders that came due while the app was asleep still show when it wakes,
-// as long as the event hasn't started yet.
+// Reminders are timed on the device, from the events saved here (including ones synced from other
+// devices), so they only fire while the app is running. Notifications go through the service
+// worker, because Android doesn't allow pages to show them directly. Reminders that came due while
+// the app was asleep still show when it wakes, as long as the event hasn't started yet.
 
 import * as storage from "./storage";
 import { addDays, formatTimeRange, fromDateKey, timeToMinutes, todayKey } from "./dateUtils";
