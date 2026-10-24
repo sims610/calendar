@@ -16,11 +16,18 @@ so it can be installed to the home screen from the browser and works offline.
   is running or when it next wakes, but not while it's fully closed.
 
 ## How data is stored
-Events are saved on the user's device in the browser's IndexedDB database. There is no
-server or account, and events do not sync between devices. Clearing the browser's site data
-deletes them.
+Events are saved on the device in the browser's IndexedDB database, so the app works offline.
+Signing in (on the Home tab) is optional:
+- Signed out, events stay on that device only. Clearing the browser's site data deletes them.
+- Signed in, events are also saved to the account on the server (`server/`, MySQL) and sync
+  between devices in the background: on opening the app, after each change, and when the
+  connection comes back. When the same event changes on two devices, the later change wins.
+- Signing in on a device that has events from before offers to add them to the account. Signing
+  out uploads any unsaved changes, then removes that account's events from the device.
 
-The server (`server/`) stores users, sessions and events in MySQL. The app doesn't use it yet.
+The client finds the server through `VITE_API_URL`. CI sets it to the deployed server; when
+it isn't set (`npm run dev`, or `npm run build` then `npm run preview`), the app uses the local
+server at http://localhost:3000.
 
 ## Project layout
 - `client/` — the app: React + TypeScript, built with Vite
