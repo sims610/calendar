@@ -5,6 +5,8 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  /** Missing for accounts saved before the server sent roles. */
+  role?: 'user' | 'admin';
 }
 
 export interface Account {

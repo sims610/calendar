@@ -30,7 +30,7 @@ const authRouter = Object.assign(express.Router(), {
       requiresAuth: false,
       description: 'Register a new user',
       example: `curl -X POST localhost:3000/api/auth -H 'Content-Type: application/json' -d '{"name":"Pat", "email":"pat@test.com", "password":"secret"}'`,
-      response: { user: { id: '…', name: 'Pat', email: 'pat@test.com' }, token: 'abc123' },
+      response: { user: { id: '…', name: 'Pat', email: 'pat@test.com', role: 'user' }, token: 'abc123' },
     },
     {
       method: 'PUT',
@@ -38,7 +38,7 @@ const authRouter = Object.assign(express.Router(), {
       requiresAuth: false,
       description: 'Login existing user',
       example: `curl -X PUT localhost:3000/api/auth -H 'Content-Type: application/json' -d '{"email":"pat@test.com", "password":"secret"}'`,
-      response: { user: { id: '…', name: 'Pat', email: 'pat@test.com' }, token: 'abc123' },
+      response: { user: { id: '…', name: 'Pat', email: 'pat@test.com', role: 'user' }, token: 'abc123' },
     },
     {
       method: 'DELETE',
