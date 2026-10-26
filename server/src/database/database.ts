@@ -110,7 +110,6 @@ export async function initializeDatabase(): Promise<void> {
   for (const statement of tableStatements) {
     await pool.query(statement);
   }
-  await addRoleColumn(pool);
   await promoteAdmin(pool);
 }
 
@@ -119,17 +118,6 @@ async function promoteAdmin(connection: Pool): Promise<void> {
   const adminEmail: string | undefined = appConfig.adminEmail;
   if (adminEmail) {
     await connection.execute(`UPDATE users SET role = 'admin' WHERE email = ?`, [normalizeEmail(adminEmail)]);
-  }
-}
-
-/** Databases made before users had a role get the column added, with every existing user a 'user'. */
-async function addRoleColumn(connection: Pool): Promise<void> {
-  const [rows] = await connection.query<RowDataPacket[]>(
-    `SELECT 1 FROM information_schema.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'`,
-  );
-  if (rows.length === 0) {
-    await connection.query(`ALTER TABLE users ADD COLUMN role ENUM('user', 'admin') NOT NULL DEFAULT 'user'`);
   }
 }
 
