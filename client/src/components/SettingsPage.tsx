@@ -10,6 +10,8 @@ import {
 import type { Account } from "../account";
 import { getSavedTheme, saveTheme, THEMES, type Theme } from "../theme";
 import { CheckIcon } from "./Icons";
+// The deploy (ci.yml) stamps this with the build's date and time, e.g. 20261022.040710.
+import { version } from "../version.json";
 
 interface SettingsPageProps {
   /** The signed-in account, or null when signed out. */
@@ -105,6 +107,8 @@ export function SettingsPage({ account, onGoToSignIn, onSignOut }: SettingsPageP
           <h2 className="settings-heading">Connected calendars</h2>
           <p className="settings-placeholder">Coming soon</p>
         </section>
+
+        <p className="settings-version">Version {version}</p>
       </main>
     </div>
   );

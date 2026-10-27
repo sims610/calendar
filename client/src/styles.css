@@ -459,6 +459,13 @@ button {
   margin-top: 12px;
 }
 
+.settings-version {
+  margin: 40px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+
 /* ---------- Event form (bottom sheet) ---------- */
 
 .sheet-backdrop {

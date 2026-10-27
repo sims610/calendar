@@ -25,7 +25,7 @@ jobs:
         run: |
           version=$(date +'%Y%m%d.%H%M%S')
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          printf '{"version": "%s" }' "$version" > client/public/version.json
+          printf '{"version": "%s" }' "$version" > client/src/version.json
 
       - name: Build
         env:
