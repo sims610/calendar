@@ -70,6 +70,9 @@ jobs:
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
         run: |
           node -e '
             const config = {
@@ -84,6 +87,11 @@ jobs:
                 listPerPage: 10,
               },
               adminEmail: process.env.ADMIN_EMAIL,
+              push: {
+                vapidPublicKey: process.env.VAPID_PUBLIC_KEY,
+                vapidPrivateKey: process.env.VAPID_PRIVATE_KEY,
+                subject: process.env.VAPID_SUBJECT,
+              },
             };
             require("fs").writeFileSync("server/src/config.js", `export default ${JSON.stringify(config, null, 2)};`);
           '

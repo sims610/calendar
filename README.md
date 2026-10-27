@@ -11,9 +11,9 @@ so it can be installed to the home screen from the browser and works offline.
 - Repeatable events (daily, weekly, monthly). Changing, moving or deleting a repeat asks
   whether it's for only that day or that day and every later one; earlier days never change.
 - Date picker in the header, and a button to jump back to today
-- Event reminders (at the start, or 5, 15 or 30 minutes before), chosen in Settings. Only
-  offered in the installed app. Reminders are timed on the device, so they show while the app
-  is running or when it next wakes, but not while it's fully closed.
+- Event reminders (at the start, or 5, 15 or 30 minutes before), chosen in Settings. The server
+  sends them as push messages, so they arrive even when the app is closed. Only offered in the
+  installed app, in browsers that support push (Android, and iOS 16.4+), while signed in.
 
 ## How data is stored
 Events are saved on the device in the browser's IndexedDB database, so the app works offline.
@@ -42,6 +42,24 @@ npm install
 npm run dev
 ```
 `GET /api/docs` lists every endpoint with an example.
+
+### Push reminders
+Reminders are sent with Web Push, which needs a VAPID key pair. Generate one once (changing the
+keys later invalidates every device's subscription):
+```
+cd server
+npx web-push generate-vapid-keys
+```
+Then add a `push` section next to `db` in `server/src/config.js`:
+```js
+push: {
+  vapidPublicKey: '…',
+  vapidPrivateKey: '…',
+  subject: 'mailto:you@example.com',
+},
+```
+Without it the server still runs, but sends no reminders. In CI the section is written from the
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` repository secrets.
 
 ## Getting started
 ```

@@ -9,12 +9,18 @@ events (`syncEvents` in `server/src/database/database.ts`), the server can send 
 16.4+ for home-screen apps — which the existing `isInstalledApp()` gate already requires).
 
 Decisions:
-- **Signed in → server push; signed out → existing local timers.** Signed-out events never reach
-  the server, so local timers stay as the fallback. A device that registered for push turns its
-  local timers off so reminders don't show twice.
-- **The reminder choice stays per device.** It's stored with that device's push subscription,
-  together with the device's time zone (event dates and times have no zone; the server needs one to
-  know when "7:30" is).
+- **Only offer notifications when they'll arrive with the app closed.** It's better for people to
+  know they won't be notified than to expect a reminder that never comes. Notifications are
+  offered only when the app is installed, the browser supports push (`"PushManager" in window`),
+  and the user is signed in. Otherwise Settings explains why instead of showing the options.
+- **No local timers.** Every reminder is sent by the server as a push. The in-page `setTimeout`
+  reminders are removed. Signed-out events never reach the server, so signed-out users get no
+  reminders, and Settings tells them to sign in.
+- **The reminder choice stays per device.** It's kept in localStorage and stored with that device's
+  push subscription, together with the device's time zone (event dates and times have no zone; the
+  server needs one to know when "7:30" is). Signing out unregisters the subscription but keeps the
+  choice, so signing back in registers it again.
+- Events made offline get their reminder once they sync, which happens when the connection comes back.
 - Work goes on the `notifications` branch, which isn't merged to `main` yet. Also include the
   already-edited header comment in `notifications.ts`.
 
@@ -56,7 +62,7 @@ subscription:
 1. `today`/`tomorrow` in its zone: `new Intl.DateTimeFormat('en-CA', { timeZone }).format(now)`.
 2. For each event in `getEventsForDay` for both days: `startsAt = zonedTime(date, startTime, zone)`,
    `remindAt = startsAt - minutesBefore min`. Due when `remindAt <= now < tooLateAt`, with the same
-   rule as the client (`startsAt`, or `startsAt + 60s` for "when it starts").
+   rule the client used (`startsAt`, or `startsAt + 60s` for "when it starts").
 3. `claimReminder` → `webpush.sendNotification(sub, JSON.stringify({ title, body, tag }))`.
    Use the client's `formatTimeRange` text for the body (port the small helper).
    404 or 410 from the push service → delete the subscription (the device unsubscribed).
@@ -75,26 +81,43 @@ handlers. The workbox `importScripts` in `vite.config.ts` stays as it is.
 `deletePushSubscription(token, endpoint)`, using the existing `request()` helper.
 
 **`client/src/notifications.ts`**:
-- `registerPush()`: if signed in (`getSavedAccount()`), supported (`"PushManager" in window`),
-  permission granted, and a reminder is chosen, call `registration.pushManager.subscribe({
-  userVisibleOnly: true, applicationServerKey })` (reuse the existing subscription if there is one),
-  then `api.savePushSubscription(…, Intl.DateTimeFormat().resolvedOptions().timeZone)`. On
-  success, set a `pushRegistered` flag (localStorage plus a module variable, the same pattern as `currentReminder`).
-  On failure (offline, server down), clear the flag so the local timers keep working.
-- `unregisterPush()`: delete it on the server, `subscription.unsubscribe()`, and clear the flag.
-- `saveReminder()`: after saving, call `registerPush()`, or `unregisterPush()` when "No notifications" is chosen.
-- `startReminders()`: also call `registerPush()`. This refreshes the time zone and recovers from an expired
-  subscription. Call it on `visibilitychange` too, at most once an hour.
-- `scheduleReminders()`: add `!pushRegistered` to `enabled`.
-- Rewrite the header comment to describe both paths.
-- Drop the unused `date` parameter from `showReminder`.
+- Remove the local timers: `timers`, `scheduleRun`, `getSentKeys`/`markSent`, `SENT_STORAGE_KEY`,
+  `startTimeOn`, `showReminder`, `AT_START_GRACE_MS`, and `scheduleReminders`, plus the imports only
+  they used. Remove the stale `remindersSent` localStorage key once on startup.
+- `pushSupported()`: `notificationsSupported() && "PushManager" in window`.
+- `registerPush(): Promise<boolean>`: if signed in (`getSavedAccount()`), `pushSupported()`,
+  permission granted, and a reminder is chosen, reuse the existing subscription
+  (`pushManager.getSubscription()`) or create one with `pushManager.subscribe({ userVisibleOnly: true,
+  applicationServerKey })` (key from `api.getPushKey()`). Then call
+  `api.savePushSubscription(…, Intl.DateTimeFormat().resolvedOptions().timeZone)`. Returns whether it worked.
+- `unregisterPush()`: delete the subscription on the server (best effort), then `subscription.unsubscribe()`.
+- `saveReminder(option)` returns `"ok" | "blocked" | "failed"`:
+  - "No notifications": `unregisterPush()`, save the choice, `"ok"`.
+  - Otherwise: request permission (`"blocked"` if denied), then `registerPush()` with the new
+    choice. Save it only if that worked. On failure return `"failed"` and keep the previous
+    choice, so Settings never shows a reminder the server doesn't know about.
+- `startReminders()`: call `registerPush()` on startup and on `visibilitychange` (at most once an
+  hour). This refreshes the time zone and recovers from an expired subscription. Failures are
+  silent, since the server keeps the last good registration.
+- Rewrite the header comment: reminders are sent by the server as push messages, so they arrive with
+  the app closed, and they need the installed app, sign-in, and push support.
 
-**`client/src/App.tsx`**: call `registerPush()` after sign-in (next to `saveAccount`, ~line 132)
-and `await unregisterPush()` in `signOut` before `api.signOut` / `clearAccount` (~line 153), while
-the token is still valid. After either one, call `scheduleReminders()` so local timers switch on or off.
+**`client/src/App.tsx`**:
+- Remove the `scheduleReminders` import and its call (and comment) in `loadEvents`. The server
+  reads the events itself.
+- Call `registerPush()` after sign-in (next to `saveAccount`, ~line 132).
+- `await unregisterPush()` in `signOut` before `api.signOut` / `clearAccount` (~line 159), while the
+  token is still valid.
 
-**`client/src/components/SettingsPage.tsx`**: no logic changes. Optionally add a note under the
-options when signed out: "Sign in to get reminders even when Calendar is closed."
+**`client/src/components/SettingsPage.tsx`**:
+- Pass `account` to `NotificationSettings`.
+- `notificationsUnavailableReason(signedIn)`, checked in this order:
+  1. `!pushSupported()` → "This browser can't send notifications when Calendar is closed."
+  2. `!isInstalledApp()` → the existing "Add Calendar to your home screen…" message.
+  3. `!signedIn` → "Sign in to get notified before your events, even when Calendar is closed."
+- The initial selection shows "No notifications" unless signed in and permission is granted.
+- On `"failed"`, show "Couldn't turn on notifications. Check your connection and try again."
+  `"blocked"` keeps the existing message.
 
 ## CI and deploy
 - `.github/workflows/ci.yml` "Write config file" step: add `VAPID_PUBLIC_KEY`,
@@ -107,11 +130,17 @@ options when signed out: "Sign in to get reminders even when Calendar is closed.
 1. `cd server && npx tsc --noEmit`; `cd client && npx tsc --noEmit`.
 2. Local: add VAPID keys to `server/src/config.js`, run `npm run dev` in `server/`, then
    `npm run build && npx vite preview` in `client/`. Check that `/api/docs` lists the push routes and `GET /api/push/key` works.
-3. In desktop Chrome, install the app from `localhost:4173` (Chrome allows this on localhost), sign
-   in, and pick "5 minutes before". Check that a `pushSubscriptions` row exists with the right zone.
-4. Add an event 7 minutes out, then **close the app window**. The notification should arrive about 5 minutes
+3. In a browser tab (not installed), Settings shows the "Add to home screen" message.
+4. In desktop Chrome, install the app from `localhost:4173` (Chrome allows this on localhost). While
+   signed out, Settings shows the sign-in message and no options.
+5. Sign in and pick "5 minutes before". Check that a `pushSubscriptions` row exists with the right zone.
+6. Add an event 7 minutes out, then **close the app window**. The notification should arrive about 5 minutes
    before the event, and clicking it opens the app. Confirm that `pushRemindersSent` has one row and that a
    second tick doesn't send it again.
-5. Edit the event's time and check that a new reminder is sent for the new time. Choose "No notifications" and check
-   that the row is deleted. Sign out and check that the row is deleted and local timers are back (repeat the earlier stubbed test while signed out).
-6. Deploy, then repeat step 4 on a phone with the home-screen app closed (Android, and iOS 16.4+).
+7. Edit the event's time and check that a new reminder is sent for the new time.
+8. Stop the server and pick "15 minutes before". The "Couldn't turn on" message shows and the selection
+   stays on 5. Start the server again.
+9. Choose "No notifications" and check that the row is deleted. Pick a reminder again, sign out, and check
+   that the row is deleted and Settings shows the sign-in message. Sign back in and check that the row
+   comes back with the saved choice.
+10. Deploy, then repeat step 6 on a phone with the home-screen app closed (Android, and iOS 16.4+).

@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   getSavedReminder,
   isInstalledApp,
-  notificationsSupported,
+  pushSupported,
   REMINDER_OPTIONS,
   saveReminder,
   type ReminderOption,
@@ -98,7 +98,7 @@ export function SettingsPage({ account, onGoToSignIn, onSignOut }: SettingsPageP
 
         <section className="settings-section">
           <h2 className="settings-heading">Notifications</h2>
-          <NotificationSettings />
+          <NotificationSettings signedIn={account !== null} />
         </section>
 
         <section className="settings-section">
@@ -110,35 +110,41 @@ export function SettingsPage({ account, onGoToSignIn, onSignOut }: SettingsPageP
   );
 }
 
-/** Why reminders can't be turned on here, or "" if they can. */
-function notificationsUnavailableReason(): string {
-  if (!notificationsSupported()) {
-    return "This browser can't show notifications.";
+/**
+ * Why reminders can't be turned on here, or "" if they can. They're only offered when they'll
+ * arrive with the app closed, so nobody expects a reminder that never comes.
+ */
+function notificationsUnavailableReason(signedIn: boolean): string {
+  if (!pushSupported()) {
+    return "This browser can't send notifications when Calendar is closed.";
   }
   if (!isInstalledApp()) {
     return "Add Calendar to your home screen to get notified before your events.";
   }
+  if (!signedIn) {
+    return "Sign in to get notified before your events, even when Calendar is closed.";
+  }
   return "";
 }
 
-function NotificationSettings() {
-  // Reminders only work while notifications are allowed, so show them as off otherwise.
+function NotificationSettings({ signedIn }: { signedIn: boolean }) {
+  // Reminders only work while signed in with notifications allowed, so show them as off otherwise.
   const [selectedReminder, setSelectedReminder] = useState(() =>
-    notificationsSupported() && Notification.permission === "granted"
+    signedIn && pushSupported() && Notification.permission === "granted"
       ? getSavedReminder()
       : REMINDER_OPTIONS[0],
   );
-  const [blocked, setBlocked] = useState(false);
+  const [result, setResult] = useState<"ok" | "blocked" | "failed">("ok");
 
-  const unavailableReason = notificationsUnavailableReason();
+  const unavailableReason = notificationsUnavailableReason(signedIn);
   if (unavailableReason) {
     return <p className="settings-placeholder">{unavailableReason}</p>;
   }
 
   const chooseReminder = async (option: ReminderOption) => {
-    const allowed = await saveReminder(option);
-    setBlocked(!allowed);
-    if (allowed) {
+    const saved = await saveReminder(option);
+    setResult(saved);
+    if (saved === "ok") {
       setSelectedReminder(option);
     }
   };
@@ -162,10 +168,15 @@ function NotificationSettings() {
           );
         })}
       </div>
-      {blocked && (
+      {result === "blocked" && (
         <p className="settings-placeholder settings-note">
           Notifications are blocked for Calendar. Allow them in your phone's settings, then try
           again.
+        </p>
+      )}
+      {result === "failed" && (
+        <p className="settings-placeholder settings-note">
+          Couldn't turn on notifications. Check your connection and try again.
         </p>
       )}
     </>

@@ -1,14 +1,17 @@
-// Event reminders, chosen in Settings. Only offered in the installed app: phones only allow
-// notifications from web apps added to the home screen.
+// Event reminders, chosen in Settings.
 //
-// Reminders are timed on the device, from the events saved here (including ones synced from other
-// devices), so they only fire while the app is running. Notifications go through the service
-// worker, because Android doesn't allow pages to show them directly. Reminders that came due while
-// the app was asleep still show when it wakes, as long as the event hasn't started yet.
+// Reminders are sent by the server as push messages, from the events synced to the account, so
+// they arrive even when the app is closed. That needs three things, and Settings only offers
+// reminders when all of them hold: the app is added to the home screen (phones only allow
+// notifications from installed web apps), the browser supports push, and the user is signed in
+// (signed-out events never reach the server). The service worker shows the messages.
+//
+// The choice is per device: it's kept here and sent to the server with this device's push
+// subscription and time zone. Signing out unregisters the device but keeps the choice, so signing
+// back in registers it again.
 
-import * as storage from "./storage";
-import { addDays, formatTimeRange, fromDateKey, timeToMinutes, todayKey } from "./dateUtils";
-import type { CalendarEvent } from "./types";
+import * as api from "./api";
+import { getSavedAccount } from "./account";
 
 export interface ReminderOption {
   id: string;
@@ -27,10 +30,11 @@ export const REMINDER_OPTIONS: ReminderOption[] = [
 
 const NO_REMINDERS = REMINDER_OPTIONS[0];
 const STORAGE_KEY = "reminder";
-const SENT_STORAGE_KEY = "remindersSent";
+/** Where reminders timed on the device used to remember what they'd shown. */
+const OLD_SENT_STORAGE_KEY = "remindersSent";
 
-/** A reminder that's late by less than this still shows when the event starts. */
-const AT_START_GRACE_MS = 60 * 1000;
+/** How often coming back to the app registers again, to keep the time zone current. */
+const REREGISTER_INTERVAL_MS = 60 * 60 * 1000;
 
 /** True when running as the app added to the home screen, not in a browser tab. */
 export function isInstalledApp(): boolean {
@@ -46,6 +50,11 @@ export function notificationsSupported(): boolean {
   return "Notification" in window && "serviceWorker" in navigator;
 }
 
+/** True when this browser can get notifications while the app is closed. */
+export function pushSupported(): boolean {
+  return notificationsSupported() && "PushManager" in window;
+}
+
 /** The saved choice, or no reminders if none is saved (or storage can't be read). */
 export function getSavedReminder(): ReminderOption {
   try {
@@ -59,125 +68,120 @@ export function getSavedReminder(): ReminderOption {
 /** The choice in use, kept here too in case it couldn't be saved. */
 let currentReminder = getSavedReminder();
 
+/** The server's push key as the bytes the browser expects. It's sent as base64url text. */
+function decodeKey(key: string): Uint8Array<ArrayBuffer> {
+  const base64 = (key + "=".repeat((4 - (key.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+}
+
 /**
- * Remembers the choice and times reminders for it. Turning reminders on asks for permission
- * first, so this must be called from a tap. Returns false if the user didn't allow
- * notifications, in which case nothing changes.
+ * Tells the server to send this device reminders for `option`, subscribing to push messages
+ * first if needed. Does nothing unless signed in, push works here, notifications are allowed,
+ * and a reminder is chosen. Returns whether the server now has the registration.
  */
-export async function saveReminder(option: ReminderOption): Promise<boolean> {
-  if (option.minutesBefore !== null && (await Notification.requestPermission()) !== "granted") {
+export async function registerPush(option: ReminderOption = currentReminder): Promise<boolean> {
+  const account = getSavedAccount();
+  if (
+    !account ||
+    option.minutesBefore === null ||
+    !pushSupported() ||
+    Notification.permission !== "granted"
+  ) {
     return false;
+  }
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription =
+      (await registration.pushManager.getSubscription()) ??
+      (await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: decodeKey(await api.getPushKey()),
+      }));
+    await api.savePushSubscription(
+      account.token,
+      subscription.toJSON(),
+      option.minutesBefore,
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Stops reminders to this device. Call before signing out, while the token still works. */
+export async function unregisterPush(): Promise<void> {
+  if (!pushSupported()) {
+    return;
+  }
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      return;
+    }
+    const account = getSavedAccount();
+    if (account) {
+      // Best effort: once unsubscribed, the push service tells the server the device is gone anyway.
+      await api.deletePushSubscription(account.token, subscription.endpoint).catch(() => {});
+    }
+    await subscription.unsubscribe();
+  } catch {
+    // Nothing more to undo here.
+  }
+}
+
+/**
+ * Remembers the choice and registers it with the server. Turning reminders on asks for permission
+ * first, so this must be called from a tap. Returns "blocked" if the user didn't allow
+ * notifications, or "failed" if the server couldn't be told; either way the choice doesn't change.
+ */
+export async function saveReminder(option: ReminderOption): Promise<"ok" | "blocked" | "failed"> {
+  if (option.minutesBefore === null) {
+    await unregisterPush();
+  } else {
+    if ((await Notification.requestPermission()) !== "granted") {
+      return "blocked";
+    }
+    if (!(await registerPush(option))) {
+      return "failed";
+    }
   }
   currentReminder = option;
   try {
     localStorage.setItem(STORAGE_KEY, option.id);
   } catch {
-    // Reminders still work while the app stays open; the choice just won't be remembered.
+    // The server has the choice; this device just won't remember it next time.
   }
-  scheduleReminders();
-  return true;
+  return "ok";
 }
 
-let timers: number[] = [];
-/** Goes up on every call to scheduleReminders, so an older call still loading events gives up. */
-let scheduleRun = 0;
+let lastRegisteredAt = 0;
 
-/** Every reminder already shown, as "clientId|date|startTime", so none shows twice. */
-function getSentKeys(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(SENT_STORAGE_KEY) ?? "[]");
-  } catch {
-    return [];
+/** Registers again, at most once an hour, so the server has this device's current time zone. */
+function refreshRegistration() {
+  if (Date.now() - lastRegisteredAt < REREGISTER_INTERVAL_MS) {
+    return;
   }
-}
-
-function markSent(key: string) {
-  // Only today's and later reminders can come up again, so forget older ones.
-  const today = todayKey();
-  const keys = getSentKeys().filter((sent) => sent.split("|")[1] >= today);
-  try {
-    localStorage.setItem(SENT_STORAGE_KEY, JSON.stringify([...keys, key]));
-  } catch {
-    // At worst the reminder shows again after the app restarts.
-  }
-}
-
-/** When the event starts on `date`, in ms. */
-function startTimeOn(event: CalendarEvent, date: string): number {
-  return fromDateKey(date).getTime() + timeToMinutes(event.startTime) * 60 * 1000;
-}
-
-async function showReminder(event: CalendarEvent, date: string, key: string) {
-  markSent(key);
-  const registration = await navigator.serviceWorker.ready;
-  await registration.showNotification(event.title || "(No title)", {
-    body: formatTimeRange(event.startTime, event.endTime),
-    // Replaces an earlier notification for the same event instead of stacking up.
-    tag: key,
-  });
+  lastRegisteredAt = Date.now();
+  // Failures are fine: the server keeps the last registration that worked.
+  registerPush();
 }
 
 /**
- * Times a notification for every event today and tomorrow, replacing any timed before.
- * Call it whenever events or the setting change. It also runs on its own each midnight and
- * when the app comes back to the front, since phones pause timers while the app is hidden.
+ * Registers on startup and when the app comes back to the front, which keeps the time zone current
+ * and recovers from an expired subscription. Call once on startup.
  */
-export async function scheduleReminders() {
-  const run = ++scheduleRun;
-  const { minutesBefore } = currentReminder;
-  const enabled =
-    minutesBefore !== null &&
-    isInstalledApp() &&
-    notificationsSupported() &&
-    Notification.permission === "granted";
-
-  const today = todayKey();
-  const tomorrow = addDays(today, 1);
-  const days = enabled ? [today, tomorrow] : [];
-  const eventsByDay = await Promise.all(
-    days.map((date) => storage.getEventsForDay(date).catch(() => [] as CalendarEvent[])),
-  );
-  if (run !== scheduleRun) {
-    return;
-  }
-
-  timers.forEach((timer) => clearTimeout(timer));
-  timers = [];
-  if (!enabled || minutesBefore === null) {
-    return;
-  }
-
-  const sentKeys = getSentKeys();
-  const now = Date.now();
-
-  days.forEach((date, index) => {
-    for (const event of eventsByDay[index]) {
-      const key = `${event.clientId}|${date}|${event.startTime}`;
-      const startsAt = startTimeOn(event, date);
-      const remindAt = startsAt - minutesBefore * 60 * 1000;
-      // Late reminders still show until the event starts, or just after for "when it starts".
-      const tooLateAt = minutesBefore === 0 ? startsAt + AT_START_GRACE_MS : startsAt;
-
-      if (sentKeys.includes(key) || now >= tooLateAt) {
-        continue;
-      }
-      timers.push(
-        window.setTimeout(() => showReminder(event, date, key), Math.max(remindAt - now, 0)),
-      );
-    }
-  });
-
-  // Tomorrow's reminders were timed above; just after midnight, time the day after's.
-  const nextMidnight = fromDateKey(tomorrow).getTime();
-  timers.push(window.setTimeout(scheduleReminders, nextMidnight - now + 1000));
-}
-
-/** Times reminders now and keeps them up to date while the app runs. Call once on startup. */
 export function startReminders() {
-  scheduleReminders();
+  try {
+    localStorage.removeItem(OLD_SENT_STORAGE_KEY);
+  } catch {
+    // Nothing saved to clear.
+  }
+  refreshRegistration();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
-      scheduleReminders();
+      refreshRegistration();
     }
   });
 }
