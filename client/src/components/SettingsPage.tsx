@@ -100,6 +100,11 @@ export function SettingsPage({ account, onGoToSignIn, onSignOut }: SettingsPageP
           <h2 className="settings-heading">Notifications</h2>
           <NotificationSettings />
         </section>
+
+        <section className="settings-section">
+          <h2 className="settings-heading">Connected calendars</h2>
+          <p className="settings-placeholder">Coming soon</p>
+        </section>
       </main>
     </div>
   );

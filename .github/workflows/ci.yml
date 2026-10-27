@@ -69,6 +69,7 @@ jobs:
           DB_HOSTNAME: ${{ secrets.DB_HOSTNAME }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
         run: |
           node -e '
             const config = {
@@ -82,6 +83,7 @@ jobs:
                 },
                 listPerPage: 10,
               },
+              adminEmail: process.env.ADMIN_EMAIL,
             };
             require("fs").writeFileSync("server/src/config.js", `export default ${JSON.stringify(config, null, 2)};`);
           '
@@ -114,3 +116,5 @@ jobs:
       - name: Deploy new container
         run: |
           aws ecs update-service --cluster calendar-service --service calendar-service --force-new-deployment
+
+          

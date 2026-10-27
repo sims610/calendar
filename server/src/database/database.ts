@@ -4,10 +4,13 @@ import mysql from 'mysql2/promise';
 import appConfig from '../config.js';
 import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
+export type Role = 'user' | 'admin';
+
 export interface User {
   id: string;
   name: string;
   email: string;
+  role: Role;
 }
 
 export type RepeatRule = 'none' | 'daily' | 'weekly' | 'monthly';
@@ -60,7 +63,8 @@ const tableStatements = [
     id CHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
-    passwordHash VARCHAR(255) NOT NULL
+    passwordHash VARCHAR(255) NOT NULL,
+    role ENUM('user', 'admin') NOT NULL DEFAULT 'user'
   )`,
   `CREATE TABLE IF NOT EXISTS sessions (
     token CHAR(64) PRIMARY KEY,
@@ -106,6 +110,15 @@ export async function initializeDatabase(): Promise<void> {
   for (const statement of tableStatements) {
     await pool.query(statement);
   }
+  await promoteAdmin(pool);
+}
+
+/** Makes the user whose email is configured as adminEmail an admin, if they have registered. */
+async function promoteAdmin(connection: Pool): Promise<void> {
+  const adminEmail: string | undefined = appConfig.adminEmail;
+  if (adminEmail) {
+    await connection.execute(`UPDATE users SET role = 'admin' WHERE email = ?`, [normalizeEmail(adminEmail)]);
+  }
 }
 
 export async function closeDatabase(): Promise<void> {
@@ -118,7 +131,7 @@ function normalizeEmail(email: string): string {
 }
 
 export async function addUser(name: string, email: string, password: string): Promise<User | null> {
-  const user: User = { id: randomUUID(), name, email: normalizeEmail(email) };
+  const user: User = { id: randomUUID(), name, email: normalizeEmail(email), role: 'user' };
   const passwordHash = await bcrypt.hash(password, 10);
   try {
     await db().execute('INSERT INTO users (id, name, email, passwordHash) VALUES (?, ?, ?, ?)', [
@@ -138,14 +151,14 @@ export async function addUser(name: string, email: string, password: string): Pr
 
 export async function verifyUser(email: string, password: string): Promise<User | null> {
   const [rows] = await db().execute<RowDataPacket[]>(
-    'SELECT id, name, email, passwordHash FROM users WHERE email = ?',
+    'SELECT id, name, email, role, passwordHash FROM users WHERE email = ?',
     [normalizeEmail(email)],
   );
   const row = rows[0];
   if (!row || !(await bcrypt.compare(password, row.passwordHash))) {
     return null;
   }
-  return { id: row.id, name: row.name, email: row.email };
+  return { id: row.id, name: row.name, email: row.email, role: row.role };
 }
 
 export async function createSession(userId: string): Promise<string> {
@@ -156,11 +169,11 @@ export async function createSession(userId: string): Promise<string> {
 
 export async function getUserByToken(token: string): Promise<User | null> {
   const [rows] = await db().execute<RowDataPacket[]>(
-    'SELECT users.id, users.name, users.email FROM sessions JOIN users ON users.id = sessions.userId WHERE sessions.token = ?',
+    'SELECT users.id, users.name, users.email, users.role FROM sessions JOIN users ON users.id = sessions.userId WHERE sessions.token = ?',
     [token],
   );
   const row = rows[0];
-  return row ? { id: row.id, name: row.name, email: row.email } : null;
+  return row ? { id: row.id, name: row.name, email: row.email, role: row.role } : null;
 }
 
 export async function deleteSession(token: string): Promise<void> {
