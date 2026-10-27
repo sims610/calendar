@@ -93,6 +93,28 @@ const tableStatements = [
     INDEX (userId, date),
     INDEX (userId, changedAt)
   )`,
+  // One row per device that gets reminders as push messages. The reminder choice and time zone
+  // are the device's: event times have no zone, so the server needs one to know when "7:30" is.
+  `CREATE TABLE IF NOT EXISTS pushSubscriptions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    userId CHAR(36) NOT NULL,
+    endpoint VARCHAR(767) NOT NULL UNIQUE,
+    p256dh VARCHAR(255) NOT NULL,
+    auth VARCHAR(255) NOT NULL,
+    minutesBefore INT NOT NULL,
+    timeZone VARCHAR(64) NOT NULL,
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+  // Reminders already sent, so none is sent twice. reminderKey is "clientId|date|startTime",
+  // so moving an event gets a new reminder.
+  `CREATE TABLE IF NOT EXISTS pushRemindersSent (
+    subscriptionId INT NOT NULL,
+    reminderKey VARCHAR(100) NOT NULL,
+    sentOn DATE NOT NULL,
+    PRIMARY KEY (subscriptionId, reminderKey),
+    INDEX (sentOn),
+    FOREIGN KEY (subscriptionId) REFERENCES pushSubscriptions(id) ON DELETE CASCADE
+  )`,
 ];
 
 /** Creates the database and tables if they don't exist yet, then opens the connection pool. */
@@ -455,4 +477,77 @@ export async function syncEvents(userId: string, events: SyncedEvent[], since: s
   // The newest change returned is where the next sync picks up.
   const cursor = rows.length > 0 ? rows[rows.length - 1].changedAt : since;
   return { events: changed, cursor };
+}
+
+/** A device's push subscription, as the browser's PushSubscription.toJSON() gives it. */
+export interface PushSubscriptionInput {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
+
+export interface PushSubscriptionRow extends PushSubscriptionInput {
+  id: number;
+  userId: string;
+  minutesBefore: number;
+  timeZone: string;
+}
+
+/** Saves the device's subscription, or updates it if the device registered before. */
+export async function savePushSubscription(
+  userId: string,
+  subscription: PushSubscriptionInput,
+  minutesBefore: number,
+  timeZone: string,
+): Promise<void> {
+  await db().execute(
+    `INSERT INTO pushSubscriptions (userId, endpoint, p256dh, auth, minutesBefore, timeZone)
+     VALUES (?, ?, ?, ?, ?, ?) AS incoming
+     ON DUPLICATE KEY UPDATE
+       userId = incoming.userId,
+       p256dh = incoming.p256dh,
+       auth = incoming.auth,
+       minutesBefore = incoming.minutesBefore,
+       timeZone = incoming.timeZone`,
+    [userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, minutesBefore, timeZone],
+  );
+}
+
+/** Removes a device's subscription. Pass null as the user when the push service says it's gone. */
+export async function deletePushSubscription(userId: string | null, endpoint: string): Promise<void> {
+  await db().execute('DELETE FROM pushSubscriptions WHERE endpoint = ? AND (? IS NULL OR userId = ?)', [
+    endpoint,
+    userId,
+    userId,
+  ]);
+}
+
+export async function getPushSubscriptions(): Promise<PushSubscriptionRow[]> {
+  const [rows] = await db().execute<RowDataPacket[]>(
+    'SELECT id, userId, endpoint, p256dh, auth, minutesBefore, timeZone FROM pushSubscriptions',
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    userId: row.userId,
+    endpoint: row.endpoint,
+    keys: { p256dh: row.p256dh, auth: row.auth },
+    minutesBefore: row.minutesBefore,
+    timeZone: row.timeZone,
+  }));
+}
+
+/**
+ * Marks a reminder as sent to the device. Returns false if it already was, so it isn't sent again,
+ * even when more than one server is running.
+ */
+export async function claimReminder(subscriptionId: number, reminderKey: string, date: string): Promise<boolean> {
+  const [result] = await db().execute<ResultSetHeader>(
+    'INSERT IGNORE INTO pushRemindersSent (subscriptionId, reminderKey, sentOn) VALUES (?, ?, ?)',
+    [subscriptionId, reminderKey, date],
+  );
+  return result.affectedRows > 0;
+}
+
+/** Forgets reminders for days before `beforeDate`, which can't come up again. */
+export async function forgetOldReminders(beforeDate: string): Promise<void> {
+  await db().execute('DELETE FROM pushRemindersSent WHERE sentOn < ?', [beforeDate]);
 }

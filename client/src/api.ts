@@ -63,3 +63,23 @@ export async function signOut(token: string): Promise<void> {
 export function syncEvents(token: string, events: SyncedEvent[], since: string | null): Promise<SyncResult> {
   return request("POST", "/api/event/sync", { events, since }, token);
 }
+
+/** The key the browser needs to subscribe to the server's push messages. */
+export async function getPushKey(): Promise<string> {
+  const { publicKey } = await request<{ publicKey: string }>("GET", "/api/push/key");
+  return publicKey;
+}
+
+/** Asks the server to send this device reminders, `minutesBefore` events start in `timeZone`. */
+export async function savePushSubscription(
+  token: string,
+  subscription: PushSubscriptionJSON,
+  minutesBefore: number,
+  timeZone: string,
+): Promise<void> {
+  await request("PUT", "/api/push", { subscription, minutesBefore, timeZone }, token);
+}
+
+export async function deletePushSubscription(token: string, endpoint: string): Promise<void> {
+  await request("DELETE", "/api/push", { endpoint }, token);
+}

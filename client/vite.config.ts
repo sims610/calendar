@@ -9,6 +9,8 @@ export default defineConfig({
       // A new version downloads in the background but waits until the user taps Reload
       // (see UpdatePrompt.tsx), so the app never changes under them.
       registerType: "prompt",
+      // Opens the app when a reminder is tapped (see notifications.ts).
+      workbox: { importScripts: ["notification-click.js"] },
       manifest: {
         name: "Calendar",
         short_name: "Calendar",

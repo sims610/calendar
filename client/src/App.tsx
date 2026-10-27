@@ -20,6 +20,7 @@ import { PlusIcon } from "./components/Icons";
 import { RepeatChoiceSheet } from "./components/RepeatChoiceSheet";
 import { SettingsPage } from "./components/SettingsPage";
 import { addDays, minutesToTime, timeToMinutes, todayKey } from "./dateUtils";
+import { registerPush, unregisterPush } from "./notifications";
 import type { CalendarEvent, EventInput, RepeatScope } from "./types";
 
 /**
@@ -128,6 +129,8 @@ export function App() {
   const signedIn = async (newAccount: Account) => {
     saveAccount(newAccount);
     setAccount(newAccount);
+    // Sends this device's reminder choice, kept from before, to the account just signed in.
+    registerPush();
     setPage("calendar");
     syncInBackground();
     setAnonymousCount(await storage.countAnonymousEvents());
@@ -152,6 +155,8 @@ export function App() {
       setLoadError("Couldn't save your latest changes. Connect to the internet and try again.");
       return;
     }
+    // While the token still works, so the server stops sending this device the account's reminders.
+    await unregisterPush();
     // The session is forgotten here either way; the server dropping it too is just tidier.
     api.signOut(account.token).catch(() => {});
     clearAccount();
