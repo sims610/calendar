@@ -134,4 +134,4 @@ authRouter.delete('/', authenticateToken, async (req: Request, res: Response) =>
   res.json({ message: 'logout successful' });
 });
 
-export { authRouter, setAuthUser, authenticateToken, authorizeAdmin };
+export { authRouter, setAuthUser, authenticateToken, authorizeAdmin, isNonEmptyString };

@@ -1,7 +1,7 @@
 // Talks to the server. CI sets VITE_API_URL to the deployed one when it builds the site;
 // everywhere else (`npm run dev`, `npm run build` + `npm run preview`) uses a local server.
 
-import type { Account } from "./account";
+import type { Account, User } from "./account";
 import type { CalendarEvent } from "./types";
 
 const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:3000").replace(/\/$/, "");
@@ -58,6 +58,20 @@ export function signIn(email: string, password: string): Promise<Account> {
 
 export async function signOut(token: string): Promise<void> {
   await request("DELETE", "/api/auth", undefined, token);
+}
+
+/** The account details to change. Changing the email or password needs `currentPassword`. */
+export interface ProfileChanges {
+  name?: string;
+  email?: string;
+  password?: string;
+  currentPassword?: string;
+}
+
+/** Saves changes to the signed-in user's details and returns them as saved. */
+export async function updateProfile(token: string, changes: ProfileChanges): Promise<User> {
+  const { user } = await request<{ user: User }>("PUT", "/api/user", changes, token);
+  return user;
 }
 
 export function syncEvents(token: string, events: SyncedEvent[], since: string | null): Promise<SyncResult> {

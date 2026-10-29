@@ -22,9 +22,17 @@ interface SettingsPageProps {
   onSignOut: () => Promise<void>;
   /** Opens the admin dashboard. Only offered to admins. */
   onOpenAdmin: () => void;
+  /** Opens the page for changing the account's name, email and password. */
+  onOpenProfile: () => void;
 }
 
-export function SettingsPage({ account, onGoToSignIn, onSignOut, onOpenAdmin }: SettingsPageProps) {
+export function SettingsPage({
+  account,
+  onGoToSignIn,
+  onSignOut,
+  onOpenAdmin,
+  onOpenProfile,
+}: SettingsPageProps) {
   const [selectedTheme, setSelectedTheme] = useState(getSavedTheme);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -56,6 +64,9 @@ export function SettingsPage({ account, onGoToSignIn, onSignOut, onOpenAdmin }: 
               <p className="settings-placeholder">
                 Signed in as {account.user.name} ({account.user.email})
               </p>
+              <button type="button" className="settings-link" onClick={onOpenProfile}>
+                Edit account
+              </button>
               <button
                 type="button"
                 className="settings-link"

@@ -5,6 +5,7 @@ import {
   getSavedAccount,
   saveAccount,
   type Account,
+  type User,
 } from "./account";
 import * as api from "./api";
 import * as storage from "./storage";
@@ -18,6 +19,7 @@ import { Header } from "./components/Header";
 import { HomePage } from "./components/HomePage";
 import { MigratePrompt } from "./components/MigratePrompt";
 import { PlusIcon } from "./components/Icons";
+import { ProfilePage } from "./components/ProfilePage";
 import { RepeatChoiceSheet } from "./components/RepeatChoiceSheet";
 import { SettingsPage } from "./components/SettingsPage";
 import { addDays, minutesToTime, timeToMinutes, todayKey } from "./dateUtils";
@@ -82,8 +84,8 @@ export function App() {
   const [formState, setFormState] = useState<FormState>({ mode: "closed" });
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [account, setAccount] = useState(getSavedAccount);
-  /** Whether the Settings tab shows the admin dashboard instead of the settings. */
-  const [showAdmin, setShowAdmin] = useState(false);
+  /** What the Settings tab shows: the settings, the admin dashboard, or the account details. */
+  const [settingsView, setSettingsView] = useState<"settings" | "admin" | "profile">("settings");
   /** Events made while signed out, offered to the account that just signed in. 0 hides the offer. */
   const [anonymousCount, setAnonymousCount] = useState(0);
 
@@ -166,7 +168,16 @@ export function App() {
     clearSyncCursor(account.user.id);
     await storage.clearUserEvents(account.user.id);
     setAccount(null);
-    setShowAdmin(false);
+    setSettingsView("settings");
+  };
+
+  /** Keeps the account's new details, so they show everywhere and are remembered on reload. */
+  const profileSaved = (user: User) => {
+    if (account) {
+      const updated = { ...account, user };
+      saveAccount(updated);
+      setAccount(updated);
+    }
   };
 
   const closeForm = () => setFormState({ mode: "closed" });
@@ -262,14 +273,21 @@ export function App() {
     return (
       <div className="app">
         {loadError && <div className="error-banner">{loadError}</div>}
-        {showAdmin && account?.user.role === "admin" ? (
-          <AdminPage account={account} onBack={() => setShowAdmin(false)} />
+        {settingsView === "admin" && account?.user.role === "admin" ? (
+          <AdminPage account={account} onBack={() => setSettingsView("settings")} />
+        ) : settingsView === "profile" && account ? (
+          <ProfilePage
+            account={account}
+            onSaved={profileSaved}
+            onBack={() => setSettingsView("settings")}
+          />
         ) : (
           <SettingsPage
             account={account}
             onGoToSignIn={() => setPage("home")}
             onSignOut={signOut}
-            onOpenAdmin={() => setShowAdmin(true)}
+            onOpenAdmin={() => setSettingsView("admin")}
+            onOpenProfile={() => setSettingsView("profile")}
           />
         )}
         <BottomNav currentPage={page} onSelectPage={setPage} />

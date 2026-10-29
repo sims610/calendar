@@ -208,6 +208,59 @@ export async function deleteSession(token: string): Promise<void> {
   await db().execute('DELETE FROM sessions WHERE token = ?', [token]);
 }
 
+/** Signs the user out everywhere except the session with `keepToken`. */
+export async function deleteOtherSessions(userId: string, keepToken: string): Promise<void> {
+  await db().execute('DELETE FROM sessions WHERE userId = ? AND token <> ?', [userId, keepToken]);
+}
+
+/** Whether `password` is the user's current password. */
+export async function verifyPassword(userId: string, password: string): Promise<boolean> {
+  const [rows] = await db().execute<RowDataPacket[]>('SELECT passwordHash FROM users WHERE id = ?', [userId]);
+  const row = rows[0];
+  return Boolean(row) && (await bcrypt.compare(password, row.passwordHash));
+}
+
+export interface UserChanges {
+  name?: string;
+  email?: string;
+  password?: string;
+}
+
+/** Saves the fields given and returns the updated user, or null if the new email is already taken. */
+export async function updateUser(userId: string, changes: UserChanges): Promise<User | null> {
+  const assignments: string[] = [];
+  const values: string[] = [];
+  if (changes.name !== undefined) {
+    assignments.push('name = ?');
+    values.push(changes.name);
+  }
+  if (changes.email !== undefined) {
+    assignments.push('email = ?');
+    values.push(normalizeEmail(changes.email));
+  }
+  if (changes.password !== undefined) {
+    assignments.push('passwordHash = ?');
+    values.push(await bcrypt.hash(changes.password, 10));
+  }
+
+  if (assignments.length > 0) {
+    try {
+      await db().execute(`UPDATE users SET ${assignments.join(', ')} WHERE id = ?`, [...values, userId]);
+    } catch (error) {
+      if ((error as { code?: string }).code === 'ER_DUP_ENTRY') {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  const [rows] = await db().execute<RowDataPacket[]>('SELECT id, name, email, role FROM users WHERE id = ?', [
+    userId,
+  ]);
+  const row = rows[0];
+  return { id: row.id, name: row.name, email: row.email, role: row.role };
+}
+
 const eventColumns =
   'id, clientId, title, date, startTime, endTime, repeatRule, endDate, excludedDates, updatedAt, deleted';
 

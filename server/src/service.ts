@@ -4,6 +4,7 @@ import { adminRouter } from './routes/adminRouter.ts';
 import { authRouter, setAuthUser } from './routes/authRouter.ts';
 import { eventRouter } from './routes/eventRouter.ts';
 import { pushRouter } from './routes/pushRouter.ts';
+import { userRouter } from './routes/userRouter.ts';
 
 interface HttpError extends Error {
   statusCode?: number;
@@ -32,10 +33,11 @@ apiRouter.use('/auth', authRouter);
 apiRouter.use('/event', eventRouter);
 apiRouter.use('/push', pushRouter);
 apiRouter.use('/admin', adminRouter);
+apiRouter.use('/user', userRouter);
 
 apiRouter.use('/docs', (req: Request, res: Response) => {
   res.json({
-    endpoints: [...authRouter.docs, ...eventRouter.docs, ...pushRouter.docs, ...adminRouter.docs],
+    endpoints: [...authRouter.docs, ...eventRouter.docs, ...pushRouter.docs, ...adminRouter.docs, ...userRouter.docs],
   });
 });
 
