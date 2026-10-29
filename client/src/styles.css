@@ -459,6 +459,34 @@ button {
   margin-top: 12px;
 }
 
+.admin-user-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-user {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-user:last-child {
+  border-bottom: none;
+}
+
+.admin-user-name {
+  font-weight: 500;
+}
+
+.admin-user-email {
+  font-size: 14px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .settings-version {
   margin: 40px 0 0;
   font-size: 13px;

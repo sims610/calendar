@@ -9,6 +9,7 @@ import {
 import * as api from "./api";
 import * as storage from "./storage";
 import { sync } from "./sync";
+import { AdminPage } from "./components/AdminPage";
 import { BottomNav, type Page } from "./components/BottomNav";
 import { DateStrip } from "./components/DateStrip";
 import { DayView } from "./components/DayView";
@@ -81,6 +82,8 @@ export function App() {
   const [formState, setFormState] = useState<FormState>({ mode: "closed" });
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [account, setAccount] = useState(getSavedAccount);
+  /** Whether the Settings tab shows the admin dashboard instead of the settings. */
+  const [showAdmin, setShowAdmin] = useState(false);
   /** Events made while signed out, offered to the account that just signed in. 0 hides the offer. */
   const [anonymousCount, setAnonymousCount] = useState(0);
 
@@ -163,6 +166,7 @@ export function App() {
     clearSyncCursor(account.user.id);
     await storage.clearUserEvents(account.user.id);
     setAccount(null);
+    setShowAdmin(false);
   };
 
   const closeForm = () => setFormState({ mode: "closed" });
@@ -258,7 +262,16 @@ export function App() {
     return (
       <div className="app">
         {loadError && <div className="error-banner">{loadError}</div>}
-        <SettingsPage account={account} onGoToSignIn={() => setPage("home")} onSignOut={signOut} />
+        {showAdmin && account?.user.role === "admin" ? (
+          <AdminPage account={account} onBack={() => setShowAdmin(false)} />
+        ) : (
+          <SettingsPage
+            account={account}
+            onGoToSignIn={() => setPage("home")}
+            onSignOut={signOut}
+            onOpenAdmin={() => setShowAdmin(true)}
+          />
+        )}
         <BottomNav currentPage={page} onSelectPage={setPage} />
       </div>
     );

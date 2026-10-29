@@ -20,9 +20,11 @@ interface SettingsPageProps {
   onGoToSignIn: () => void;
   /** Resolves once the user's events are uploaded and removed from this device. */
   onSignOut: () => Promise<void>;
+  /** Opens the admin dashboard. Only offered to admins. */
+  onOpenAdmin: () => void;
 }
 
-export function SettingsPage({ account, onGoToSignIn, onSignOut }: SettingsPageProps) {
+export function SettingsPage({ account, onGoToSignIn, onSignOut, onOpenAdmin }: SettingsPageProps) {
   const [selectedTheme, setSelectedTheme] = useState(getSavedTheme);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -74,6 +76,15 @@ export function SettingsPage({ account, onGoToSignIn, onSignOut }: SettingsPageP
             </>
           )}
         </section>
+
+        {account?.user.role === "admin" && (
+          <section className="settings-section">
+            <h2 className="settings-heading">Admin</h2>
+            <button type="button" className="settings-link" onClick={onOpenAdmin}>
+              View users
+            </button>
+          </section>
+        )}
 
         <section className="settings-section">
           <h2 className="settings-heading">App color</h2>

@@ -84,6 +84,18 @@ function authenticateToken(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+function authorizeAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    res.status(401).json({ message: 'unauthorized' });
+    return;
+  }
+  if (req.user.role !== 'admin') {
+    res.status(403).json({ message: 'forbidden' });
+    return;
+  }
+  next();
+}
+
 // register
 authRouter.post('/', async (req: Request, res: Response) => {
   const { name, email, password } = req.body ?? {};
@@ -122,4 +134,4 @@ authRouter.delete('/', authenticateToken, async (req: Request, res: Response) =>
   res.json({ message: 'logout successful' });
 });
 
-export { authRouter, setAuthUser, authenticateToken };
+export { authRouter, setAuthUser, authenticateToken, authorizeAdmin };

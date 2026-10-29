@@ -51,6 +51,14 @@ export function CaretDownIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function BackIcon({ size }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M15 5l-7 7 7 7" />
+    </Svg>
+  );
+}
+
 export function PlusIcon({ size }: IconProps) {
   return (
     <Svg size={size}>

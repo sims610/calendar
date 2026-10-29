@@ -198,6 +198,12 @@ export async function getUserByToken(token: string): Promise<User | null> {
   return row ? { id: row.id, name: row.name, email: row.email, role: row.role } : null;
 }
 
+/** Every registered user, by name. */
+export async function getUsers(): Promise<Pick<User, 'id' | 'name' | 'email'>[]> {
+  const [rows] = await db().execute<RowDataPacket[]>('SELECT id, name, email FROM users ORDER BY name, email');
+  return rows.map((row) => ({ id: row.id, name: row.name, email: row.email }));
+}
+
 export async function deleteSession(token: string): Promise<void> {
   await db().execute('DELETE FROM sessions WHERE token = ?', [token]);
 }

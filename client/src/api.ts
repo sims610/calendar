@@ -80,6 +80,19 @@ export async function savePushSubscription(
   await request("PUT", "/api/push", { subscription, minutesBefore, timeZone }, token);
 }
 
+/** A registered user, as the admin dashboard lists them. */
+export interface UserSummary {
+  id: string;
+  name: string;
+  email: string;
+}
+
+/** Every registered user. Only works with an admin's token. */
+export async function getUsers(token: string): Promise<UserSummary[]> {
+  const { users } = await request<{ users: UserSummary[] }>("GET", "/api/admin/users", undefined, token);
+  return users;
+}
+
 export async function deletePushSubscription(token: string, endpoint: string): Promise<void> {
   await request("DELETE", "/api/push", { endpoint }, token);
 }
