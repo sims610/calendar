@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { fromDateKey } from "../dateUtils";
 import type { CalendarEvent, EventInput, RepeatRule, RepeatScope } from "../types";
 import { RepeatChoiceSheet } from "./RepeatChoiceSheet";
 
@@ -18,7 +19,29 @@ const REPEAT_OPTIONS: { value: RepeatRule; label: string }[] = [
   { value: "daily", label: "Every day" },
   { value: "weekly", label: "Every week" },
   { value: "monthly", label: "Every month" },
+  { value: "custom", label: "Custom…" },
 ];
+
+/** Buttons for a custom repeat's weekdays, Sunday first like Date.getDay(). */
+const WEEKDAYS = [
+  { letter: "S", name: "Sunday" },
+  { letter: "M", name: "Monday" },
+  { letter: "T", name: "Tuesday" },
+  { letter: "W", name: "Wednesday" },
+  { letter: "T", name: "Thursday" },
+  { letter: "F", name: "Friday" },
+  { letter: "S", name: "Saturday" },
+];
+
+const MAX_REPEAT_INTERVAL = 52;
+
+/** Whether two custom repeats happen on the same days and weeks. */
+function sameRepeatPattern(a: EventInput, b: EventInput): boolean {
+  return (
+    a.repeat !== "custom" ||
+    (a.repeatInterval === b.repeatInterval && a.repeatDays?.join() === b.repeatDays?.join())
+  );
+}
 
 /** A bottom sheet for creating, editing and deleting an event. */
 export function EventForm({ event, initialValues, onSave, onDelete, onClose }: EventFormProps) {
@@ -34,6 +57,26 @@ export function EventForm({ event, initialValues, onSave, onDelete, onClose }: E
 
   const updateField = <Key extends keyof EventInput>(key: Key, value: EventInput[Key]) => {
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const changeRepeat = (repeat: RepeatRule) => {
+    setForm((current) => {
+      if (repeat !== "custom" || current.repeatDays) {
+        return { ...current, repeat };
+      }
+      // Start a new custom repeat on the date's weekday, every week.
+      return { ...current, repeat, repeatDays: [fromDateKey(current.date).getDay()], repeatInterval: 1 };
+    });
+  };
+
+  const toggleRepeatDay = (day: number) => {
+    setForm((current) => {
+      const days = current.repeatDays ?? [];
+      const repeatDays = days.includes(day)
+        ? days.filter((chosen) => chosen !== day)
+        : [...days, day].sort((a, b) => a - b);
+      return { ...current, repeatDays };
+    });
   };
 
   /** Runs a save or delete, showing any error inside the form. */
@@ -57,6 +100,17 @@ export function EventForm({ event, initialValues, onSave, onDelete, onClose }: E
     if (form.endTime <= form.startTime) {
       setError("End time must be after start time.");
       return;
+    }
+    if (form.repeat === "custom") {
+      if (!form.repeatDays?.length) {
+        setError("Choose at least one day to repeat on.");
+        return;
+      }
+      const interval = form.repeatInterval ?? NaN;
+      if (!Number.isInteger(interval) || interval < 1 || interval > MAX_REPEAT_INTERVAL) {
+        setError(`Repeat every 1 to ${MAX_REPEAT_INTERVAL} weeks.`);
+        return;
+      }
     }
 
     if (isEditingRepeatingEvent) {
@@ -139,10 +193,7 @@ export function EventForm({ event, initialValues, onSave, onDelete, onClose }: E
 
           <label>
             Repeat
-            <select
-              value={form.repeat}
-              onChange={(e) => updateField("repeat", e.target.value as RepeatRule)}
-            >
+            <select value={form.repeat} onChange={(e) => changeRepeat(e.target.value as RepeatRule)}>
               {REPEAT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -150,6 +201,38 @@ export function EventForm({ event, initialValues, onSave, onDelete, onClose }: E
               ))}
             </select>
           </label>
+
+          {form.repeat === "custom" && (
+            <>
+              <div className="repeat-interval">
+                Every
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_REPEAT_INTERVAL}
+                  // Empty while the user clears the box to type a new number.
+                  value={Number.isNaN(form.repeatInterval) ? "" : form.repeatInterval}
+                  onChange={(e) => updateField("repeatInterval", e.target.valueAsNumber)}
+                  aria-label="Number of weeks"
+                />
+                {form.repeatInterval === 1 ? "week" : "weeks"}
+              </div>
+              <div className="repeat-days" role="group" aria-label="Repeat on">
+                {WEEKDAYS.map((weekday, day) => (
+                  <button
+                    key={weekday.name}
+                    type="button"
+                    className="repeat-day"
+                    aria-label={weekday.name}
+                    aria-pressed={form.repeatDays?.includes(day) ?? false}
+                    onClick={() => toggleRepeatDay(day)}
+                  >
+                    {weekday.letter}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           {error && <p className="form-error">{error}</p>}
 
@@ -179,7 +262,10 @@ export function EventForm({ event, initialValues, onSave, onDelete, onClose }: E
         <RepeatChoiceSheet
           title={pendingChoice === "save" ? "Save repeating event" : "Delete repeating event"}
           // Changing how often it repeats can't apply to a single day.
-          allowOnlyThis={pendingChoice === "delete" || form.repeat === event?.repeat}
+          allowOnlyThis={
+            pendingChoice === "delete" ||
+            (event !== null && form.repeat === event.repeat && sameRepeatPattern(form, event))
+          }
           onChoose={handleChoice}
           onCancel={() => setPendingChoice(null)}
         />

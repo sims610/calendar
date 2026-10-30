@@ -1,6 +1,8 @@
 // Days are passed around as "YYYY-MM-DD" strings ("date keys") and times as "HH:mm".
 // Using plain strings avoids time zone surprises.
 
+import type { EventInput } from "./types";
+
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -35,6 +37,35 @@ export function formatMonthDay(dateKey: string): string {
 /** "2026-08-11" → "Tue" */
 export function formatWeekday(dateKey: string): string {
   return WEEKDAY_NAMES[fromDateKey(dateKey).getDay()];
+}
+
+/** The Sunday that starts the week `dateKey` is in. */
+export function startOfWeek(dateKey: string): string {
+  return addDays(dateKey, -fromDateKey(dateKey).getDay());
+}
+
+/** Whole days from `fromKey` to `toKey`. Rounding absorbs the hour a daylight saving change adds or removes. */
+export function daysBetween(fromKey: string, toKey: string): number {
+  return Math.round((fromDateKey(toKey).getTime() - fromDateKey(fromKey).getTime()) / 86_400_000);
+}
+
+/** How often an event repeats, e.g. "Every week" or "Every 2 weeks on Mon, Wed". */
+export function describeRepeat(event: EventInput): string {
+  switch (event.repeat) {
+    case "none":
+      return "Does not repeat";
+    case "daily":
+      return "Every day";
+    case "weekly":
+      return "Every week";
+    case "monthly":
+      return "Every month";
+    case "custom": {
+      const interval = event.repeatInterval ?? 1;
+      const days = (event.repeatDays ?? []).map((day) => WEEKDAY_NAMES[day]).join(", ");
+      return `${interval === 1 ? "Every week" : `Every ${interval} weeks`} on ${days}`;
+    }
+  }
 }
 
 /** "13:30" → 810 */

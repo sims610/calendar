@@ -7,7 +7,7 @@
 import { openDB, type DBSchema } from "idb";
 import { getSavedAccount } from "./account";
 import type { SyncedEvent } from "./api";
-import { addDays, fromDateKey } from "./dateUtils";
+import { addDays, daysBetween, fromDateKey, startOfWeek } from "./dateUtils";
 import type { CalendarEvent, EventInput, RepeatScope } from "./types";
 
 interface CalendarDatabase extends DBSchema {
@@ -76,6 +76,11 @@ function occursOn(event: CalendarEvent, dateKey: string): boolean {
       return day.getDay() === firstDay.getDay();
     case "monthly":
       return day.getDate() === firstDay.getDate();
+    case "custom": {
+      // The chosen weekdays, in every Nth week (starting on Sunday) from the week of the first day.
+      const weeks = daysBetween(startOfWeek(event.date), startOfWeek(dateKey)) / 7;
+      return Boolean(event.repeatDays?.includes(day.getDay())) && weeks % (event.repeatInterval ?? 1) === 0;
+    }
   }
 }
 
@@ -113,10 +118,22 @@ export async function createEvent(input: EventInput): Promise<void> {
   await database.add("events", newEvent(detailsOf(input), currentOwner()));
 }
 
-/** Just the details the user edits, without any of the repeat bookkeeping. */
+/**
+ * Just the details the user edits, without any of the repeat bookkeeping. The custom days and
+ * interval are cleared for other rules, so changing away from a custom repeat removes them.
+ */
 function detailsOf(input: EventInput): EventInput {
   const { title, date, startTime, endTime, repeat } = input;
-  return { title, date, startTime, endTime, repeat };
+  const isCustom = repeat === "custom";
+  return {
+    title,
+    date,
+    startTime,
+    endTime,
+    repeat,
+    repeatDays: isCustom ? input.repeatDays : undefined,
+    repeatInterval: isCustom ? input.repeatInterval : undefined,
+  };
 }
 
 /**
@@ -140,7 +157,7 @@ export async function updateEvent(
 
   if (scope === "only-this") {
     transaction.store.put(changed(event, { excludedDates: [...excludedDates, occurrenceDate] }));
-    transaction.store.add(newEvent({ ...detailsOf(input), repeat: "none" }, event.ownerUserId));
+    transaction.store.add(newEvent(detailsOf({ ...input, repeat: "none" }), event.ownerUserId));
   } else if (occurrenceDate === event.date) {
     // Changing from the very first day changes the whole series.
     transaction.store.put(changed(event, detailsOf(input)));

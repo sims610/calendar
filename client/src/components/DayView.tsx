@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { colorForTitle } from "../eventColors";
-import { formatHour, formatTimeRange, minutesToTime } from "../dateUtils";
+import { describeRepeat, formatHour, formatTimeRange, minutesToTime } from "../dateUtils";
 import { layoutEvents } from "../layoutEvents";
 import type { CalendarEvent } from "../types";
 import { useEventDrag } from "../useEventDrag";
@@ -147,7 +147,7 @@ export function DayView({
                   {formatTimeRange(minutesToTime(startMinutes), minutesToTime(endMinutes))}
                 </span>
                 {event.repeat !== "none" && (
-                  <span className="event-repeat" title={`Repeats ${event.repeat}`}>
+                  <span className="event-repeat" title={describeRepeat(event)}>
                     <RepeatIcon />
                   </span>
                 )}

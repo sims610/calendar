@@ -73,6 +73,8 @@ function editValues(event: CalendarEvent, date: string): EventInput {
     startTime: event.startTime,
     endTime: event.endTime,
     repeat: event.repeat,
+    repeatDays: event.repeatDays,
+    repeatInterval: event.repeatInterval,
   };
 }
 

@@ -1,4 +1,4 @@
-export type RepeatRule = "none" | "daily" | "weekly" | "monthly";
+export type RepeatRule = "none" | "daily" | "weekly" | "monthly" | "custom";
 
 /** The details the user fills in for an event. Dates are "YYYY-MM-DD", times are "HH:mm". */
 export interface EventInput {
@@ -8,6 +8,10 @@ export interface EventInput {
   startTime: string;
   endTime: string;
   repeat: RepeatRule;
+  /** For a "custom" repeat: the weekdays it happens on, 0–6 from Sunday like Date.getDay(), sorted. */
+  repeatDays?: number[];
+  /** For a "custom" repeat: it happens every this many weeks, counted from the week of `date`. */
+  repeatInterval?: number;
 }
 
 /** An event as stored on the device. */

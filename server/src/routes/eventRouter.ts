@@ -39,15 +39,18 @@ const eventRouter = Object.assign(express.Router(), {
       method: 'POST',
       path: '/api/event',
       requiresAuth: true,
-      description: 'Create an event',
-      example: `curl -X POST localhost:3000/api/event -H 'Authorization: Bearer abc123' -H 'Content-Type: application/json' -d '{"title":"Gym", "date":"2026-10-20", "startTime":"07:00", "endTime":"08:00", "repeat":"daily"}'`,
+      description:
+        'Create an event. repeat is none, daily, weekly, monthly or custom. A custom repeat also needs repeatDays (weekdays 0–6 from Sunday) and repeatInterval (every 1–52 weeks)',
+      example: `curl -X POST localhost:3000/api/event -H 'Authorization: Bearer abc123' -H 'Content-Type: application/json' -d '{"title":"Gym", "date":"2026-10-20", "startTime":"07:00", "endTime":"08:00", "repeat":"custom", "repeatDays":[1, 3, 5], "repeatInterval":1}'`,
       response: {
         id: 1,
         title: 'Gym',
         date: '2026-10-20',
         startTime: '07:00',
         endTime: '08:00',
-        repeat: 'daily',
+        repeat: 'custom',
+        repeatDays: [1, 3, 5],
+        repeatInterval: 1,
         clientId: '…',
         updatedAt: 1792656000000,
         deleted: false,
@@ -108,9 +111,15 @@ function isScope(value: unknown): value is RepeatScope {
   return repeatScopes.includes(value as RepeatScope);
 }
 
+const maxRepeatInterval = 52;
+
+function isWeekday(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 6;
+}
+
 /** The event details from a request body, or null if any are missing or malformed. */
 function readEventInput(body: Record<string, unknown> | undefined): EventInput | null {
-  const { title, date, startTime, endTime, repeat } = body ?? {};
+  const { title, date, startTime, endTime, repeat, repeatDays, repeatInterval } = body ?? {};
   if (
     typeof title !== 'string' ||
     title.trim().length === 0 ||
@@ -123,10 +132,26 @@ function readEventInput(body: Record<string, unknown> | undefined): EventInput |
   ) {
     return null;
   }
-  return { title: title.trim(), date, startTime, endTime, repeat: repeat as RepeatRule };
+  const input: EventInput = { title: title.trim(), date, startTime, endTime, repeat: repeat as RepeatRule };
+  // The days and interval only mean something for a custom repeat, so other rules drop them.
+  if (input.repeat === 'custom') {
+    if (
+      !Array.isArray(repeatDays) ||
+      repeatDays.length === 0 ||
+      !repeatDays.every(isWeekday) ||
+      !Number.isInteger(repeatInterval) ||
+      (repeatInterval as number) < 1 ||
+      (repeatInterval as number) > maxRepeatInterval
+    ) {
+      return null;
+    }
+    input.repeatDays = [...new Set(repeatDays as number[])].sort((a, b) => a - b);
+    input.repeatInterval = repeatInterval as number;
+  }
+  return input;
 }
 
-const invalidEventMessage = 'title, date (YYYY-MM-DD), startTime and endTime (HH:mm), and repeat are required';
+const invalidEventMessage = `title, date (YYYY-MM-DD), startTime and endTime (HH:mm), and repeat are required. A custom repeat also needs repeatDays (0–6 from Sunday) and repeatInterval (1–${maxRepeatInterval})`;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // A cursor is a changedAt value from an earlier sync, like "2026-10-22 14:03:11.482".

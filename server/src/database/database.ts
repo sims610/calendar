@@ -13,8 +13,8 @@ export interface User {
   role: Role;
 }
 
-export type RepeatRule = 'none' | 'daily' | 'weekly' | 'monthly';
-export const repeatRules: RepeatRule[] = ['none', 'daily', 'weekly', 'monthly'];
+export type RepeatRule = 'none' | 'daily' | 'weekly' | 'monthly' | 'custom';
+export const repeatRules: RepeatRule[] = ['none', 'daily', 'weekly', 'monthly', 'custom'];
 
 /** Which days a change to a repeating event applies to. */
 export type RepeatScope = 'only-this' | 'this-and-future';
@@ -27,6 +27,10 @@ export interface EventInput {
   startTime: string;
   endTime: string;
   repeat: RepeatRule;
+  /** For a "custom" repeat: the weekdays it happens on, 0–6 from Sunday, sorted. */
+  repeatDays?: number[];
+  /** For a "custom" repeat: it happens every this many weeks, counted from the week of `date`. */
+  repeatInterval?: number;
 }
 
 /** Same shape as the client's CalendarEvent, minus the fields that only matter on a device. */
@@ -82,7 +86,9 @@ const tableStatements = [
     date DATE NOT NULL,
     startTime TIME NOT NULL,
     endTime TIME NOT NULL,
-    repeatRule ENUM('none', 'daily', 'weekly', 'monthly') NOT NULL,
+    repeatRule ENUM('none', 'daily', 'weekly', 'monthly', 'custom') NOT NULL,
+    repeatDays JSON NULL,
+    repeatInterval TINYINT NULL,
     endDate DATE NULL,
     excludedDates JSON NOT NULL,
     updatedAt BIGINT NOT NULL,
@@ -132,7 +138,28 @@ export async function initializeDatabase(): Promise<void> {
   for (const statement of tableStatements) {
     await pool.query(statement);
   }
+  await addCustomRepeatColumns(pool);
   await promoteAdmin(pool);
+}
+
+/**
+ * Brings an events table made before custom repeats existed up to date. CREATE TABLE IF NOT EXISTS
+ * leaves an existing table as it is, so it wouldn't get the new columns otherwise.
+ */
+async function addCustomRepeatColumns(connection: Pool): Promise<void> {
+  const [rows] = await connection.execute<RowDataPacket[]>(
+    `SELECT 1 FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'events' AND COLUMN_NAME = 'repeatDays'`,
+  );
+  if (rows.length > 0) {
+    return;
+  }
+  await connection.query(
+    `ALTER TABLE events
+       MODIFY repeatRule ENUM('none', 'daily', 'weekly', 'monthly', 'custom') NOT NULL,
+       ADD COLUMN repeatDays JSON NULL AFTER repeatRule,
+       ADD COLUMN repeatInterval TINYINT NULL AFTER repeatDays`,
+  );
 }
 
 /** Makes the user whose email is configured as adminEmail an admin, if they have registered. */
@@ -262,7 +289,7 @@ export async function updateUser(userId: string, changes: UserChanges): Promise<
 }
 
 const eventColumns =
-  'id, clientId, title, date, startTime, endTime, repeatRule, endDate, excludedDates, updatedAt, deleted';
+  'id, clientId, title, date, startTime, endTime, repeatRule, repeatDays, repeatInterval, endDate, excludedDates, updatedAt, deleted';
 
 function toEvent(row: RowDataPacket): CalendarEvent {
   const event: CalendarEvent = {
@@ -279,6 +306,10 @@ function toEvent(row: RowDataPacket): CalendarEvent {
     // BOOLEAN is TINYINT(1) in MySQL, so it comes back as 0 or 1.
     deleted: Boolean(row.deleted),
   };
+  if (row.repeatRule === 'custom') {
+    event.repeatDays = row.repeatDays;
+    event.repeatInterval = row.repeatInterval;
+  }
   if (row.endDate) {
     event.endDate = row.endDate;
   }
@@ -295,6 +326,14 @@ function addDays(dateKey: string, amount: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** The repeatDays and repeatInterval column values. Only a custom repeat has them. */
+function repeatPattern(input: EventInput): [string | null, number | null] {
+  if (input.repeat !== 'custom') {
+    return [null, null];
+  }
+  return [JSON.stringify(input.repeatDays), input.repeatInterval ?? null];
+}
+
 async function insertEvent(
   connection: Pool | PoolConnection,
   userId: string,
@@ -303,8 +342,9 @@ async function insertEvent(
   excludedDates: string[] = [],
 ): Promise<number> {
   const [result] = await connection.execute<ResultSetHeader>(
-    `INSERT INTO events (userId, clientId, title, date, startTime, endTime, repeatRule, endDate, excludedDates, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO events
+       (userId, clientId, title, date, startTime, endTime, repeatRule, repeatDays, repeatInterval, endDate, excludedDates, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       userId,
       randomUUID(),
@@ -313,6 +353,7 @@ async function insertEvent(
       input.startTime,
       input.endTime,
       input.repeat,
+      ...repeatPattern(input),
       endDate,
       JSON.stringify(excludedDates),
       Date.now(),
@@ -321,7 +362,11 @@ async function insertEvent(
   return result.insertId;
 }
 
-/** Every event of the user's that happens on the given day ("YYYY-MM-DD"), including repeats. */
+/**
+ * Every event of the user's that happens on the given day ("YYYY-MM-DD"), including repeats.
+ * A custom repeat happens on its chosen weekdays, in weeks (starting on Sunday) that are a multiple
+ * of repeatInterval after the week of its first day.
+ */
 export async function getEventsForDay(userId: string, date: string): Promise<CalendarEvent[]> {
   const [rows] = await db().execute<RowDataPacket[]>(
     `SELECT ${eventColumns} FROM events
@@ -335,9 +380,14 @@ export async function getEventsForDay(userId: string, date: string): Promise<Cal
          OR repeatRule = 'daily'
          OR (repeatRule = 'weekly' AND DAYOFWEEK(date) = DAYOFWEEK(?))
          OR (repeatRule = 'monthly' AND DAYOFMONTH(date) = DAYOFMONTH(?))
+         OR (repeatRule = 'custom'
+             AND JSON_CONTAINS(repeatDays, CAST(DAYOFWEEK(?) - 1 AS JSON))
+             AND MOD(DATEDIFF(DATE_SUB(?, INTERVAL DAYOFWEEK(?) - 1 DAY),
+                              DATE_SUB(date, INTERVAL DAYOFWEEK(date) - 1 DAY)) DIV 7,
+                     repeatInterval) = 0)
        )
      ORDER BY startTime, id`,
-    [userId, date, date, date, date, date, date],
+    [userId, date, date, date, date, date, date, date, date, date],
   );
   return rows.map(toEvent);
 }
@@ -405,12 +455,23 @@ export async function updateEvent(
         Date.now(),
         event.id,
       ]);
+      // repeatPattern leaves out the custom days, since this copy doesn't repeat.
       await insertEvent(connection, userId, { ...input, repeat: 'none' });
     } else if (occurrenceDate === event.date) {
       // Changing from the very first day changes the whole series.
       await connection.execute(
-        'UPDATE events SET title = ?, date = ?, startTime = ?, endTime = ?, repeatRule = ?, updatedAt = ? WHERE id = ?',
-        [input.title, input.date, input.startTime, input.endTime, input.repeat, Date.now(), event.id],
+        `UPDATE events SET title = ?, date = ?, startTime = ?, endTime = ?, repeatRule = ?, repeatDays = ?,
+           repeatInterval = ?, updatedAt = ? WHERE id = ?`,
+        [
+          input.title,
+          input.date,
+          input.startTime,
+          input.endTime,
+          input.repeat,
+          ...repeatPattern(input),
+          Date.now(),
+          event.id,
+        ],
       );
     } else {
       await connection.execute('UPDATE events SET endDate = ?, excludedDates = ?, updatedAt = ? WHERE id = ?', [
@@ -488,14 +549,17 @@ export async function syncEvents(userId: string, events: SyncedEvent[], since: s
       // updatedAt is assigned last because MySQL applies these assignments left to right.
       await connection.execute(
         `INSERT INTO events
-           (userId, clientId, title, date, startTime, endTime, repeatRule, endDate, excludedDates, updatedAt, deleted)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS incoming
+           (userId, clientId, title, date, startTime, endTime, repeatRule, repeatDays, repeatInterval, endDate,
+            excludedDates, updatedAt, deleted)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS incoming
          ON DUPLICATE KEY UPDATE
            title = IF(incoming.updatedAt > events.updatedAt, incoming.title, events.title),
            date = IF(incoming.updatedAt > events.updatedAt, incoming.date, events.date),
            startTime = IF(incoming.updatedAt > events.updatedAt, incoming.startTime, events.startTime),
            endTime = IF(incoming.updatedAt > events.updatedAt, incoming.endTime, events.endTime),
            repeatRule = IF(incoming.updatedAt > events.updatedAt, incoming.repeatRule, events.repeatRule),
+           repeatDays = IF(incoming.updatedAt > events.updatedAt, incoming.repeatDays, events.repeatDays),
+           repeatInterval = IF(incoming.updatedAt > events.updatedAt, incoming.repeatInterval, events.repeatInterval),
            endDate = IF(incoming.updatedAt > events.updatedAt, incoming.endDate, events.endDate),
            excludedDates = IF(incoming.updatedAt > events.updatedAt, incoming.excludedDates, events.excludedDates),
            deleted = IF(incoming.updatedAt > events.updatedAt, incoming.deleted, events.deleted),
@@ -508,6 +572,7 @@ export async function syncEvents(userId: string, events: SyncedEvent[], since: s
           event.startTime,
           event.endTime,
           event.repeat,
+          ...repeatPattern(event),
           event.endDate ?? null,
           JSON.stringify(event.excludedDates ?? []),
           event.updatedAt,

@@ -548,6 +548,37 @@ button {
   gap: 12px;
 }
 
+.repeat-interval {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.repeat-interval input {
+  width: 72px;
+}
+
+.repeat-days {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.repeat-day {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  font-weight: 500;
+}
+
+.repeat-day[aria-pressed="true"] {
+  border-color: var(--theme);
+  background: var(--theme);
+  color: #fff;
+}
+
 .form-note,
 .form-error {
   margin: 0;
