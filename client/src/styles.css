@@ -399,9 +399,10 @@ button {
   color: var(--theme);
 }
 
+/* 5 per row at every width, so the 10 colors always make two full rows. */
 .color-options {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -429,6 +430,17 @@ button {
   height: 44px;
   border-radius: 50%;
   color: #fff;
+}
+
+@media (max-width: 480px) {
+  .color-options {
+    gap: 6px;
+  }
+
+  .color-option {
+    padding: 8px 0;
+    font-size: 12px;
+  }
 }
 
 .reminder-options {
