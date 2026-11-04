@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   clearAccount,
   clearSyncCursor,
+  getHiddenPeople,
   getSavedAccount,
   saveAccount,
+  saveHiddenPeople,
   type Account,
   type User,
 } from "./account";
@@ -18,10 +20,12 @@ import { EventForm } from "./components/EventForm";
 import { Header } from "./components/Header";
 import { HomePage } from "./components/HomePage";
 import { MigratePrompt } from "./components/MigratePrompt";
+import { PeoplePage } from "./components/PeoplePage";
 import { PlusIcon } from "./components/Icons";
 import { ProfilePage } from "./components/ProfilePage";
 import { RepeatChoiceSheet } from "./components/RepeatChoiceSheet";
 import { SettingsPage } from "./components/SettingsPage";
+import { SharedEventSheet } from "./components/SharedEventSheet";
 import { addDays, minutesToTime, timeToMinutes, todayKey } from "./dateUtils";
 import { registerPush, unregisterPush } from "./notifications";
 import type { CalendarEvent, EventInput, RepeatScope } from "./types";
@@ -90,6 +94,58 @@ export function App() {
   const [settingsView, setSettingsView] = useState<"settings" | "admin" | "profile">("settings");
   /** Events made while signed out, offered to the account that just signed in. 0 hides the offer. */
   const [anonymousCount, setAnonymousCount] = useState(0);
+  const [connections, setConnections] = useState<api.Connection[]>([]);
+  /** Other people's events. Kept in memory only, so they stay out of syncing and off the device. */
+  const [sharedEvents, setSharedEvents] = useState<api.SharedEvent[]>([]);
+  const [openSharedEvent, setOpenSharedEvent] = useState<api.NamedSharedEvent | null>(null);
+  const [hiddenPeople, setHiddenPeople] = useState(() =>
+    account ? getHiddenPeople(account.user.id) : [],
+  );
+
+  // Other people's events must not outlive the account allowed to see them. Clearing while
+  // rendering means they're never drawn for the next account.
+  const accountUserId = account?.user.id;
+  const [connectionsUserId, setConnectionsUserId] = useState(accountUserId);
+  if (accountUserId !== connectionsUserId) {
+    setConnectionsUserId(accountUserId);
+    setConnections([]);
+    setSharedEvents([]);
+    setOpenSharedEvent(null);
+    setHiddenPeople(accountUserId ? getHiddenPeople(accountUserId) : []);
+  }
+
+  const latestConnectionsFetch = useRef(0);
+
+  /** Fetches connections and shared events. If that fails, the last result stays on screen. */
+  const refreshConnections = useCallback(async () => {
+    const fetchNumber = ++latestConnectionsFetch.current;
+    const fetchAccount = getSavedAccount();
+    if (!fetchAccount) {
+      return;
+    }
+    try {
+      const [newConnections, newSharedEvents] = await Promise.all([
+        api.getConnections(fetchAccount.token),
+        api.getSharedEvents(fetchAccount.token),
+      ]);
+      // Ignore a slow answer once a newer fetch started or the account changed.
+      if (
+        fetchNumber === latestConnectionsFetch.current &&
+        getSavedAccount()?.token === fetchAccount.token
+      ) {
+        setConnections(newConnections);
+        setSharedEvents(newSharedEvents);
+      }
+    } catch {
+      // Tried again the next time the app syncs.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (page === "people") {
+      refreshConnections();
+    }
+  }, [page, refreshConnections]);
 
   const loadEvents = useCallback(async () => {
     try {
@@ -111,10 +167,11 @@ export function App() {
 
   /** Syncs in the background and shows anything that came from other devices. */
   const syncInBackground = useCallback(async () => {
+    refreshConnections();
     if (await sync()) {
       await loadEventsRef.current();
     }
-  }, []);
+  }, [refreshConnections]);
 
   // Sync on start, when the connection comes back, and when the app is brought back to the
   // front, which is when changes from other devices are most likely waiting.
@@ -180,6 +237,16 @@ export function App() {
       saveAccount(updated);
       setAccount(updated);
     }
+  };
+
+  const setPersonShown = (userId: string, shown: boolean) => {
+    if (!account) {
+      return;
+    }
+    const others = hiddenPeople.filter((id) => id !== userId);
+    const updated = shown ? others : [...others, userId];
+    saveHiddenPeople(account.user.id, updated);
+    setHiddenPeople(updated);
   };
 
   const closeForm = () => setFormState({ mode: "closed" });
@@ -261,12 +328,38 @@ export function App() {
     />
   );
 
+  const bottomNav = (
+    <BottomNav
+      currentPage={page}
+      onSelectPage={setPage}
+      pendingCount={
+        connections.filter((c) => c.status === "pending" && c.direction === "incoming").length
+      }
+    />
+  );
+
   if (page === "home") {
     return (
       <div className="app">
         <HomePage account={account} onSignedIn={signedIn} />
-        <BottomNav currentPage={page} onSelectPage={setPage} />
+        {bottomNav}
         {migratePrompt}
+      </div>
+    );
+  }
+
+  if (page === "people") {
+    return (
+      <div className="app">
+        <PeoplePage
+          account={account}
+          connections={connections}
+          hiddenPeople={hiddenPeople}
+          onGoToSignIn={() => setPage("home")}
+          onChanged={refreshConnections}
+          onSetShown={setPersonShown}
+        />
+        {bottomNav}
       </div>
     );
   }
@@ -292,10 +385,23 @@ export function App() {
             onOpenProfile={() => setSettingsView("profile")}
           />
         )}
-        <BottomNav currentPage={page} onSelectPage={setPage} />
+        {bottomNav}
       </div>
     );
   }
+
+  // Only people still connected, so a removed person's events go as soon as the list updates.
+  const ownerNames = new Map(
+    connections.filter((c) => c.status === "accepted").map((c) => [c.user.id, c.user.name]),
+  );
+  const daySharedEvents = sharedEvents.flatMap((event) => {
+    const ownerName = ownerNames.get(event.ownerUserId);
+    return ownerName !== undefined &&
+      !hiddenPeople.includes(event.ownerUserId) &&
+      storage.occursOn(event, selectedDate)
+      ? [{ ...event, ownerName }]
+      : [];
+  });
 
   return (
     <div className="app">
@@ -308,7 +414,9 @@ export function App() {
         <DayView
           date={selectedDate}
           events={events}
+          sharedEvents={daySharedEvents}
           onEventClick={(event) => setFormState({ mode: "edit", event })}
+          onSharedEventClick={setOpenSharedEvent}
           onEventMove={moveEvent}
           onEmptySlotClick={(hour) => setFormState({ mode: "create", startHour: hour })}
           onNextDay={() => setSelectedDate(addDays(selectedDate, 1))}
@@ -323,7 +431,15 @@ export function App() {
         </button>
       </main>
 
-      <BottomNav currentPage={page} onSelectPage={setPage} />
+      {bottomNav}
+
+      {openSharedEvent && (
+        <SharedEventSheet
+          event={openSharedEvent}
+          date={selectedDate}
+          onClose={() => setOpenSharedEvent(null)}
+        />
+      )}
 
       {formState.mode !== "closed" && (
         <EventForm

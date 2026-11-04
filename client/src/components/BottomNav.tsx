@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CalendarIcon, GearIcon, HomeIcon, MapPinIcon, PersonIcon } from "./Icons";
 
-export type Page = "home" | "calendar" | "settings";
+export type Page = "home" | "calendar" | "people" | "settings";
 
 interface Tab {
   label: string;
@@ -13,7 +13,7 @@ interface Tab {
 const TABS: Tab[] = [
   { label: "Home", icon: <HomeIcon />, page: "home" },
   { label: "Calendar", icon: <CalendarIcon />, page: "calendar" },
-  { label: "People", icon: <PersonIcon /> },
+  { label: "Connections", icon: <PersonIcon />, page: "people" },
   { label: "Map", icon: <MapPinIcon /> },
   { label: "Settings", icon: <GearIcon />, page: "settings" },
 ];
@@ -21,9 +21,11 @@ const TABS: Tab[] = [
 interface BottomNavProps {
   currentPage: Page;
   onSelectPage: (page: Page) => void;
+  /** Connection requests waiting for an answer, shown as a badge on the People tab. */
+  pendingCount: number;
 }
 
-export function BottomNav({ currentPage, onSelectPage }: BottomNavProps) {
+export function BottomNav({ currentPage, onSelectPage, pendingCount }: BottomNavProps) {
   return (
     <nav className="bottom-nav">
       {TABS.map(({ label, icon, page }) => (
@@ -35,7 +37,17 @@ export function BottomNav({ currentPage, onSelectPage }: BottomNavProps) {
           aria-current={page === currentPage ? "page" : undefined}
           onClick={() => page && onSelectPage(page)}
         >
-          {icon}
+          <span className="bottom-nav-icon">
+            {icon}
+            {page === "people" && pendingCount > 0 && (
+              <span
+                className="bottom-nav-badge"
+                aria-label={pendingCount === 1 ? "1 request" : `${pendingCount} requests`}
+              >
+                {pendingCount}
+              </span>
+            )}
+          </span>
           <span>{label}</span>
         </button>
       ))}

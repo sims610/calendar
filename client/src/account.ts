@@ -18,6 +18,8 @@ export interface Account {
 const ACCOUNT_KEY = "account";
 /** One cursor per user, so switching accounts doesn't skip the other user's changes. */
 const cursorKey = (userId: string) => `syncCursor:${userId}`;
+/** One list per user, so people sharing a device keep their own choices. */
+const hiddenPeopleKey = (userId: string) => `hiddenPeople:${userId}`;
 
 /** The signed-in account, or null when signed out (or storage can't be read). */
 export function getSavedAccount(): Account | null {
@@ -67,5 +69,23 @@ export function clearSyncCursor(userId: string) {
     localStorage.removeItem(cursorKey(userId));
   } catch {
     // Nothing saved to clear.
+  }
+}
+
+/** The ids of the people whose events the user has hidden on this device. Everyone else shows. */
+export function getHiddenPeople(userId: string): string[] {
+  try {
+    const saved = localStorage.getItem(hiddenPeopleKey(userId));
+    return saved ? (JSON.parse(saved) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveHiddenPeople(userId: string, hiddenPeople: string[]) {
+  try {
+    localStorage.setItem(hiddenPeopleKey(userId), JSON.stringify(hiddenPeople));
+  } catch {
+    // Hidden for now; the app just won't remember it next time.
   }
 }

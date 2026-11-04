@@ -110,3 +110,41 @@ export async function getUsers(token: string): Promise<UserSummary[]> {
 export async function deletePushSubscription(token: string, endpoint: string): Promise<void> {
   await request("DELETE", "/api/push", { endpoint }, token);
 }
+
+/** Someone the user is connected to, or has a request with. */
+export interface Connection {
+  id: string;
+  status: "pending" | "accepted";
+  /** Whether the other person sent the request (incoming) or the user did (outgoing). */
+  direction: "incoming" | "outgoing";
+  /** The other person. */
+  user: UserSummary;
+}
+
+/** An event of someone the user is connected to. Read-only, and never saved on the device. */
+export type SharedEvent = SyncedEvent & { ownerUserId: string };
+
+/** A shared event ready to show, along with who it belongs to. */
+export type NamedSharedEvent = SharedEvent & { ownerName: string };
+
+export function getConnections(token: string): Promise<Connection[]> {
+  return request("GET", "/api/connection", undefined, token);
+}
+
+/** Asks to connect with whoever has that email. If they already asked, this connects the two. */
+export function requestConnection(token: string, email: string): Promise<Connection> {
+  return request("POST", "/api/connection", { email }, token);
+}
+
+export async function acceptConnection(token: string, id: string): Promise<void> {
+  await request("PUT", `/api/connection/${encodeURIComponent(id)}/accept`, undefined, token);
+}
+
+/** Declines a request, cancels one the user sent, or removes a connection. */
+export async function deleteConnection(token: string, id: string): Promise<void> {
+  await request("DELETE", `/api/connection/${encodeURIComponent(id)}`, undefined, token);
+}
+
+export function getSharedEvents(token: string): Promise<SharedEvent[]> {
+  return request("GET", "/api/connection/events", undefined, token);
+}

@@ -52,7 +52,10 @@ const databasePromise = openDB<CalendarDatabase>("calendar", 2, {
 });
 
 /** Returns true if the event happens on the given day ("YYYY-MM-DD"). */
-function occursOn(event: CalendarEvent, dateKey: string): boolean {
+export function occursOn(
+  event: Pick<CalendarEvent, "date" | "endDate" | "excludedDates" | "repeat" | "repeatDays" | "repeatInterval">,
+  dateKey: string,
+): boolean {
   // Events never happen before their first day. "YYYY-MM-DD" strings sort like dates.
   if (dateKey < event.date) {
     return false;

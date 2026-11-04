@@ -121,6 +121,19 @@ const tableStatements = [
     INDEX (sentOn),
     FOREIGN KEY (subscriptionId) REFERENCES pushSubscriptions(id) ON DELETE CASCADE
   )`,
+  // pairKey is the two user ids sorted and joined, so A→B and B→A collide and a pair only has one
+  // row. Declining, cancelling and removing all delete the row, so the two can connect again later.
+  `CREATE TABLE IF NOT EXISTS connections (
+    id CHAR(36) PRIMARY KEY,
+    requesterId CHAR(36) NOT NULL,
+    addresseeId CHAR(36) NOT NULL,
+    pairKey CHAR(73) NOT NULL UNIQUE,
+    status ENUM('pending', 'accepted') NOT NULL,
+    createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    FOREIGN KEY (requesterId) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (addresseeId) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX (addresseeId, status)
+  )`,
 ];
 
 /** Creates the database and tables if they don't exist yet, then opens the connection pool. */
@@ -229,6 +242,15 @@ export async function getUserByToken(token: string): Promise<User | null> {
 export async function getUsers(): Promise<Pick<User, 'id' | 'name' | 'email'>[]> {
   const [rows] = await db().execute<RowDataPacket[]>('SELECT id, name, email FROM users ORDER BY name, email');
   return rows.map((row) => ({ id: row.id, name: row.name, email: row.email }));
+}
+
+/** The user with that email, however it was typed. */
+export async function getUserByEmail(email: string): Promise<User | null> {
+  const [rows] = await db().execute<RowDataPacket[]>('SELECT id, name, email, role FROM users WHERE email = ?', [
+    normalizeEmail(email),
+  ]);
+  const row = rows[0];
+  return row ? { id: row.id, name: row.name, email: row.email, role: row.role } : null;
 }
 
 export async function deleteSession(token: string): Promise<void> {
@@ -601,6 +623,99 @@ export async function syncEvents(userId: string, events: SyncedEvent[], since: s
   // The newest change returned is where the next sync picks up.
   const cursor = rows.length > 0 ? rows[rows.length - 1].changedAt : since;
   return { events: changed, cursor };
+}
+
+export type ConnectionStatus = 'pending' | 'accepted';
+
+/** A connection as one of its two people sees it. */
+export interface Connection {
+  id: string;
+  status: ConnectionStatus;
+  /** Whether the other person sent the request (incoming) or this user did (outgoing). */
+  direction: 'incoming' | 'outgoing';
+  /** The other person. */
+  user: Pick<User, 'id' | 'name' | 'email'>;
+}
+
+/** An event of someone the user is connected to. */
+export interface SharedEvent extends SyncedEvent {
+  ownerUserId: string;
+}
+
+/**
+ * Saves a pending request from `requesterId` to `addresseeId`. Returns null if the two already have
+ * a connection, in either direction and in any state.
+ */
+export async function createConnectionRequest(requesterId: string, addresseeId: string): Promise<string | null> {
+  const id = randomUUID();
+  const pairKey = [requesterId, addresseeId].sort().join(':');
+  try {
+    await db().execute(
+      `INSERT INTO connections (id, requesterId, addresseeId, pairKey, status) VALUES (?, ?, ?, ?, 'pending')`,
+      [id, requesterId, addresseeId, pairKey],
+    );
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ER_DUP_ENTRY') {
+      return null;
+    }
+    throw error;
+  }
+  return id;
+}
+
+/** Everyone the user is connected to or has a request with, by name. */
+export async function getConnections(userId: string): Promise<Connection[]> {
+  const [rows] = await db().execute<RowDataPacket[]>(
+    `SELECT connections.id, connections.status, connections.requesterId,
+            users.id AS userId, users.name, users.email
+     FROM connections
+     JOIN users ON users.id = IF(connections.requesterId = ?, connections.addresseeId, connections.requesterId)
+     WHERE connections.requesterId = ? OR connections.addresseeId = ?
+     ORDER BY users.name, users.email`,
+    [userId, userId, userId],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    status: row.status,
+    direction: row.requesterId === userId ? 'outgoing' : 'incoming',
+    user: { id: row.userId, name: row.name, email: row.email },
+  }));
+}
+
+/** Accepts a request sent to the user. Returns false if they have no such pending request. */
+export async function acceptConnection(id: string, userId: string): Promise<boolean> {
+  const [result] = await db().execute<ResultSetHeader>(
+    `UPDATE connections SET status = 'accepted' WHERE id = ? AND addresseeId = ? AND status = 'pending'`,
+    [id, userId],
+  );
+  return result.affectedRows > 0;
+}
+
+/** Declines, cancels or removes a connection. Returns false if the user isn't one of its two people. */
+export async function deleteConnection(id: string, userId: string): Promise<boolean> {
+  const [result] = await db().execute<ResultSetHeader>(
+    'DELETE FROM connections WHERE id = ? AND (requesterId = ? OR addresseeId = ?)',
+    [id, userId, userId],
+  );
+  return result.affectedRows > 0;
+}
+
+/** The events of everyone the user has an accepted connection with. Pending requests share nothing. */
+export async function getSharedEvents(userId: string): Promise<SharedEvent[]> {
+  const [rows] = await db().execute<RowDataPacket[]>(
+    `SELECT ${eventColumns}, userId FROM events
+     WHERE deleted = FALSE
+       AND userId IN (
+         SELECT IF(requesterId = ?, addresseeId, requesterId) FROM connections
+         WHERE status = 'accepted' AND (requesterId = ? OR addresseeId = ?)
+       )
+     ORDER BY date, startTime, id`,
+    [userId, userId, userId],
+  );
+  return rows.map((row) => {
+    const { id, ...event } = toEvent(row);
+    return { ...event, ownerUserId: row.userId };
+  });
 }
 
 /** A device's push subscription, as the browser's PushSubscription.toJSON() gives it. */

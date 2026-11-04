@@ -1,9 +1,14 @@
 import { timeToMinutes } from "./dateUtils";
-import type { CalendarEvent } from "./types";
+
+/** The only fields laying out an event needs. */
+interface Timed {
+  startTime: string;
+  endTime: string;
+}
 
 /** Where an event sits in the day view. */
-export interface PositionedEvent {
-  event: CalendarEvent;
+export interface PositionedEvent<Event extends Timed> {
+  event: Event;
   startMinutes: number;
   endMinutes: number;
   /** Which column the event is in when it overlaps others (0 = leftmost). */
@@ -19,7 +24,7 @@ export interface PositionedEvent {
  * Inside a group, each event goes into the first column that is free at its
  * start time. Every event in the group then shares the group's width equally.
  */
-export function layoutEvents(events: CalendarEvent[]): PositionedEvent[] {
+export function layoutEvents<Event extends Timed>(events: Event[]): PositionedEvent<Event>[] {
   const sorted = events
     .map((event) => ({
       event,
@@ -30,8 +35,8 @@ export function layoutEvents(events: CalendarEvent[]): PositionedEvent[] {
     }))
     .sort((a, b) => a.startMinutes - b.startMinutes || b.endMinutes - a.endMinutes);
 
-  const result: PositionedEvent[] = [];
-  let group: PositionedEvent[] = [];
+  const result: PositionedEvent<Event>[] = [];
+  let group: PositionedEvent<Event>[] = [];
   let groupEnd = 0;
   // columnEnds[i] is the time when column i becomes free again.
   let columnEnds: number[] = [];

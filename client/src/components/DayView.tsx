@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { colorForTitle } from "../eventColors";
+import type { NamedSharedEvent } from "../api";
+import { colorForPerson, colorForTitle } from "../eventColors";
 import { describeRepeat, formatHour, formatTimeRange, minutesToTime } from "../dateUtils";
 import { layoutEvents } from "../layoutEvents";
 import type { CalendarEvent } from "../types";
@@ -18,7 +19,10 @@ const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 interface DayViewProps {
   date: string;
   events: CalendarEvent[];
+  /** The day's events from other people. They can be opened but not edited or moved. */
+  sharedEvents: NamedSharedEvent[];
   onEventClick: (event: CalendarEvent) => void;
+  onSharedEventClick: (event: NamedSharedEvent) => void;
   /** Called when an event is pressed, held and dragged to a new start time. */
   onEventMove: (event: CalendarEvent, startMinutes: number) => void;
   /** Called when an empty part of the day is tapped, with the hour (0–23) that was tapped. */
@@ -32,7 +36,9 @@ interface DayViewProps {
 export function DayView({
   date,
   events,
+  sharedEvents,
   onEventClick,
+  onSharedEventClick,
   onEventMove,
   onEmptySlotClick,
   onNextDay,
@@ -111,10 +117,41 @@ export function DayView({
         <div className="events-area">
           <HourSlots hourHeight={hourHeight} onSlotClick={onEmptySlotClick} />
 
-          {layoutEvents(events).map((positioned) => {
+          {layoutEvents<CalendarEvent | NamedSharedEvent>([...events, ...sharedEvents]).map((positioned) => {
             const { event, column, columnCount } = positioned;
-            const color = colorForTitle(event.title);
             const widthPercent = 100 / columnCount;
+
+            if ("ownerName" in event) {
+              const color = colorForPerson(event.ownerUserId);
+              return (
+                <button
+                  // The numeric id only exists on the device that owns the event.
+                  key={`shared-${event.clientId}`}
+                  className="event-block shared"
+                  onClick={() => onSharedEventClick(event)}
+                  onContextMenu={(menuEvent) => menuEvent.preventDefault()}
+                  style={{
+                    top: positioned.startMinutes * pixelsPerMinute,
+                    height: (positioned.endMinutes - positioned.startMinutes) * pixelsPerMinute,
+                    left: `${column * widthPercent}%`,
+                    width: `${widthPercent}%`,
+                    background: color.background,
+                    borderColor: color.border,
+                  }}
+                >
+                  <span className="event-title">{event.title}</span>
+                  <span className="event-owner">{event.ownerName}</span>
+                  <span className="event-time">{formatTimeRange(event.startTime, event.endTime)}</span>
+                  {event.repeat !== "none" && (
+                    <span className="event-repeat" title={describeRepeat(event)}>
+                      <RepeatIcon />
+                    </span>
+                  )}
+                </button>
+              );
+            }
+
+            const color = colorForTitle(event.title);
 
             // While an event is being dragged, draw it where it would land.
             const isDragging = drag.preview?.eventId === event.id;

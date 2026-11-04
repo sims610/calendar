@@ -286,6 +286,18 @@ button {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+/* Someone else's event: dashed, so it can't be mistaken for your own in the same color. */
+.event-block.shared {
+  border: 1px dashed;
+  border-left: 4px dashed;
+}
+
+.event-owner {
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+}
+
 .event-title {
   text-transform: uppercase;
   font-size: 15px;
@@ -349,6 +361,27 @@ button {
 
 .bottom-nav-tab.active {
   color: var(--theme);
+}
+
+.bottom-nav-icon {
+  position: relative;
+  display: flex;
+}
+
+.bottom-nav-badge {
+  position: absolute;
+  top: -4px;
+  right: -10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--now);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
 }
 
 /* ---------- Settings ---------- */
@@ -498,6 +531,87 @@ button {
   font-size: 14px;
   color: var(--muted);
   overflow-wrap: anywhere;
+}
+
+/* ---------- People ---------- */
+
+.connection-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connection-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.connection-row:last-child {
+  border-bottom: none;
+}
+
+.connection-person {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.connection-name {
+  font-weight: 500;
+}
+
+.connection-email {
+  font-size: 14px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.connection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.connection-button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.connection-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.connection-pending {
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: var(--strip-background);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.connection-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.connection-switch input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--theme);
 }
 
 .settings-version {
@@ -654,6 +768,11 @@ button {
 .button-choice {
   border: 1px solid #ccc;
   text-align: left;
+}
+
+.shared-event-detail {
+  margin: 0;
+  font-size: 15px;
 }
 
 /* ---------- Home: account ---------- */

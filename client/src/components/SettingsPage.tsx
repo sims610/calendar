@@ -125,11 +125,6 @@ export function SettingsPage({
           <NotificationSettings signedIn={account !== null} />
         </section>
 
-        <section className="settings-section">
-          <h2 className="settings-heading">Connected calendars</h2>
-          <p className="settings-placeholder">Coming soon</p>
-        </section>
-
         <p className="settings-version">Version {version}</p>
       </main>
     </div>

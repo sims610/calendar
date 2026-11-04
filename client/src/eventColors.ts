@@ -14,14 +14,24 @@ const PALETTE: EventColor[] = [
   { background: "#fdf3e1", border: "#d98a10" }, // orange
 ];
 
+/** The same text always gets the same color. */
+function colorForText(text: string): EventColor {
+  let hash = 0;
+  for (const character of text) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return PALETTE[hash % PALETTE.length];
+}
+
 /**
  * Picks a color for an event based on its title, so events with the same
  * title always get the same color.
  */
 export function colorForTitle(title: string): EventColor {
-  let hash = 0;
-  for (const character of title.toUpperCase()) {
-    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  }
-  return PALETTE[hash % PALETTE.length];
+  return colorForText(title.toUpperCase());
+}
+
+/** Picks a color for someone else's events, so all of one person's events match. */
+export function colorForPerson(userId: string): EventColor {
+  return colorForText(userId);
 }

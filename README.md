@@ -24,6 +24,9 @@ Signing in (on the Home tab) is optional:
   connection comes back. When the same event changes on two devices, the later change wins.
 - Signing in on a device that has events from before offers to add them to the account. Signing
   out uploads any unsaved changes, then removes that account's events from the device.
+- On the People tab, two accounts can connect by email. Once a request is accepted, each sees all
+  of the other's events on the day view, read-only. These are fetched when the app syncs and kept
+  in memory only, so they aren't available offline and no reminders are sent for them.
 
 The client finds the server through `VITE_API_URL`. CI sets it to the deployed server; when
 it isn't set (`npm run dev`, or `npm run build` then `npm run preview`), the app uses the local
