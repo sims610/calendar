@@ -107,6 +107,34 @@ export async function getUsers(token: string): Promise<UserSummary[]> {
   return users;
 }
 
+/** A feature someone asked for, as the admin list shows it. */
+export interface FeatureSuggestion {
+  id: number;
+  text: string;
+  /** When it was sent, as an ISO string. */
+  createdAt: string;
+  /** Who sent it. */
+  user: UserSummary;
+}
+
+/** The longest suggestion the server accepts. */
+export const MAX_SUGGESTION_LENGTH = 1000;
+
+export async function suggestFeature(token: string, text: string): Promise<void> {
+  await request("POST", "/api/suggestion", { text }, token);
+}
+
+/** Every feature suggestion, newest first. Only works with an admin's token. */
+export async function getFeatureSuggestions(token: string): Promise<FeatureSuggestion[]> {
+  const { suggestions } = await request<{ suggestions: FeatureSuggestion[] }>(
+    "GET",
+    "/api/admin/suggestions",
+    undefined,
+    token,
+  );
+  return suggestions;
+}
+
 export async function deletePushSubscription(token: string, endpoint: string): Promise<void> {
   await request("DELETE", "/api/push", { endpoint }, token);
 }

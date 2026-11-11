@@ -24,6 +24,10 @@ interface SettingsPageProps {
   onOpenAdmin: () => void;
   /** Opens the page for changing the account's name, email and password. */
   onOpenProfile: () => void;
+  /** Opens the form for suggesting a feature. Only offered when signed in. */
+  onOpenSuggest: () => void;
+  /** Opens the list of every feature suggestion. Only offered to admins. */
+  onOpenAdminSuggestions: () => void;
 }
 
 export function SettingsPage({
@@ -32,6 +36,8 @@ export function SettingsPage({
   onSignOut,
   onOpenAdmin,
   onOpenProfile,
+  onOpenSuggest,
+  onOpenAdminSuggestions,
 }: SettingsPageProps) {
   const [selectedTheme, setSelectedTheme] = useState(getSavedTheme);
   const [signingOut, setSigningOut] = useState(false);
@@ -94,6 +100,9 @@ export function SettingsPage({
             <button type="button" className="settings-link" onClick={onOpenAdmin}>
               View users
             </button>
+            <button type="button" className="settings-link" onClick={onOpenAdminSuggestions}>
+              View feature suggestions
+            </button>
           </section>
         )}
 
@@ -123,6 +132,22 @@ export function SettingsPage({
         <section className="settings-section">
           <h2 className="settings-heading">Notifications</h2>
           <NotificationSettings signedIn={account !== null} />
+        </section>
+
+        <section className="settings-section">
+          <h2 className="settings-heading">Feedback</h2>
+          {account ? (
+            <button type="button" className="settings-link" onClick={onOpenSuggest}>
+              Suggest a feature
+            </button>
+          ) : (
+            <>
+              <p className="settings-placeholder">Sign in to suggest a feature.</p>
+              <button type="button" className="settings-link" onClick={onGoToSignIn}>
+                Sign in or create an account
+              </button>
+            </>
+          )}
         </section>
 
         <p className="settings-version">Version {version}</p>

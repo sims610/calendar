@@ -13,6 +13,7 @@ import * as api from "./api";
 import * as storage from "./storage";
 import { sync } from "./sync";
 import { AdminPage } from "./components/AdminPage";
+import { AdminSuggestionsPage } from "./components/AdminSuggestionsPage";
 import { BottomNav, type Page } from "./components/BottomNav";
 import { DateStrip } from "./components/DateStrip";
 import { DayView } from "./components/DayView";
@@ -25,6 +26,7 @@ import { PlusIcon } from "./components/Icons";
 import { ProfilePage } from "./components/ProfilePage";
 import { RepeatChoiceSheet } from "./components/RepeatChoiceSheet";
 import { SettingsPage } from "./components/SettingsPage";
+import { SuggestFeaturePage } from "./components/SuggestFeaturePage";
 import { SharedEventSheet } from "./components/SharedEventSheet";
 import { addDays, minutesToTime, timeToMinutes, todayKey } from "./dateUtils";
 import { registerPush, unregisterPush } from "./notifications";
@@ -90,8 +92,10 @@ export function App() {
   const [formState, setFormState] = useState<FormState>({ mode: "closed" });
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [account, setAccount] = useState(getSavedAccount);
-  /** What the Settings tab shows: the settings, the admin dashboard, or the account details. */
-  const [settingsView, setSettingsView] = useState<"settings" | "admin" | "profile">("settings");
+  /** What the Settings tab shows: the settings, an admin page, the account details, or the suggestion form. */
+  const [settingsView, setSettingsView] = useState<
+    "settings" | "admin" | "adminSuggestions" | "profile" | "suggest"
+  >("settings");
   /** Events made while signed out, offered to the account that just signed in. 0 hides the offer. */
   const [anonymousCount, setAnonymousCount] = useState(0);
   const [connections, setConnections] = useState<api.Connection[]>([]);
@@ -370,6 +374,10 @@ export function App() {
         {loadError && <div className="error-banner">{loadError}</div>}
         {settingsView === "admin" && account?.user.role === "admin" ? (
           <AdminPage account={account} onBack={() => setSettingsView("settings")} />
+        ) : settingsView === "adminSuggestions" && account?.user.role === "admin" ? (
+          <AdminSuggestionsPage account={account} onBack={() => setSettingsView("settings")} />
+        ) : settingsView === "suggest" && account ? (
+          <SuggestFeaturePage account={account} onBack={() => setSettingsView("settings")} />
         ) : settingsView === "profile" && account ? (
           <ProfilePage
             account={account}
@@ -383,6 +391,8 @@ export function App() {
             onSignOut={signOut}
             onOpenAdmin={() => setSettingsView("admin")}
             onOpenProfile={() => setSettingsView("profile")}
+            onOpenSuggest={() => setSettingsView("suggest")}
+            onOpenAdminSuggestions={() => setSettingsView("adminSuggestions")}
           />
         )}
         {bottomNav}

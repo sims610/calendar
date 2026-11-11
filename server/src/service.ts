@@ -5,6 +5,7 @@ import { authRouter, setAuthUser } from './routes/authRouter.ts';
 import { connectionRouter } from './routes/connectionRouter.ts';
 import { eventRouter } from './routes/eventRouter.ts';
 import { pushRouter } from './routes/pushRouter.ts';
+import { suggestionRouter } from './routes/suggestionRouter.ts';
 import { userRouter } from './routes/userRouter.ts';
 
 interface HttpError extends Error {
@@ -36,6 +37,7 @@ apiRouter.use('/push', pushRouter);
 apiRouter.use('/admin', adminRouter);
 apiRouter.use('/user', userRouter);
 apiRouter.use('/connection', connectionRouter);
+apiRouter.use('/suggestion', suggestionRouter);
 
 apiRouter.use('/docs', (req: Request, res: Response) => {
   res.json({
@@ -46,6 +48,7 @@ apiRouter.use('/docs', (req: Request, res: Response) => {
       ...adminRouter.docs,
       ...userRouter.docs,
       ...connectionRouter.docs,
+      ...suggestionRouter.docs,
     ],
   });
 });

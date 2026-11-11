@@ -134,7 +134,18 @@ const tableStatements = [
     FOREIGN KEY (addresseeId) REFERENCES users(id) ON DELETE CASCADE,
     INDEX (addresseeId, status)
   )`,
+  `CREATE TABLE IF NOT EXISTS featureSuggestions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    userId CHAR(36) NOT NULL,
+    text VARCHAR(1000) NOT NULL,
+    createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX (createdAt)
+  )`,
 ];
+
+/** The longest feature suggestion the database holds. */
+export const maxSuggestionLength = 1000;
 
 /** Creates the database and tables if they don't exist yet, then opens the connection pool. */
 export async function initializeDatabase(): Promise<void> {
@@ -789,4 +800,38 @@ export async function claimReminder(subscriptionId: number, reminderKey: string,
 /** Forgets reminders for days before `beforeDate`, which can't come up again. */
 export async function forgetOldReminders(beforeDate: string): Promise<void> {
   await db().execute('DELETE FROM pushRemindersSent WHERE sentOn < ?', [beforeDate]);
+}
+
+/** A feature someone asked for, as the admin list shows it. */
+export interface FeatureSuggestion {
+  id: number;
+  text: string;
+  /** When it was sent, as an ISO string. */
+  createdAt: string;
+  /** Who sent it. */
+  user: Pick<User, 'id' | 'name' | 'email'>;
+}
+
+export async function addFeatureSuggestion(userId: string, text: string): Promise<void> {
+  await db().execute('INSERT INTO featureSuggestions (userId, text) VALUES (?, ?)', [userId, text]);
+}
+
+/** Every suggestion, newest first. */
+export async function getFeatureSuggestions(): Promise<FeatureSuggestion[]> {
+  const [rows] = await db().execute<RowDataPacket[]>(
+    // UNIX_TIMESTAMP gives the true moment whatever the session time zone; dateStrings would give
+    // a zone-less string instead.
+    `SELECT featureSuggestions.id, featureSuggestions.text,
+            UNIX_TIMESTAMP(featureSuggestions.createdAt) AS createdAtSeconds,
+            users.id AS userId, users.name, users.email
+     FROM featureSuggestions
+     JOIN users ON users.id = featureSuggestions.userId
+     ORDER BY featureSuggestions.createdAt DESC, featureSuggestions.id DESC`,
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    text: row.text,
+    createdAt: new Date(Number(row.createdAtSeconds) * 1000).toISOString(),
+    user: { id: row.userId, name: row.name, email: row.email },
+  }));
 }
