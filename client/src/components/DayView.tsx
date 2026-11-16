@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { NamedSharedEvent } from "../api";
-import { colorForPerson, colorForTitle } from "../eventColors";
+import { colorForEvent, colorForPerson } from "../eventColors";
 import { describeRepeat, formatHour, formatTimeRange, minutesToTime } from "../dateUtils";
 import { layoutEvents } from "../layoutEvents";
 import type { CalendarEvent } from "../types";
@@ -151,7 +151,7 @@ export function DayView({
               );
             }
 
-            const color = colorForTitle(event.title);
+            const color = colorForEvent(event);
 
             // While an event is being dragged, draw it where it would land.
             const isDragging = drag.preview?.eventId === event.id;

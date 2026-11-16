@@ -1,3 +1,5 @@
+import type { EventColorId } from "./eventColors";
+
 export type RepeatRule = "none" | "daily" | "weekly" | "monthly" | "custom";
 
 /** The details the user fills in for an event. Dates are "YYYY-MM-DD", times are "HH:mm". */
@@ -12,6 +14,8 @@ export interface EventInput {
   repeatDays?: number[];
   /** For a "custom" repeat: it happens every this many weeks, counted from the week of `date`. */
   repeatInterval?: number;
+  /** The color the user chose. Missing means it's picked from the title. */
+  color?: EventColorId;
 }
 
 /** An event as stored on the device. */

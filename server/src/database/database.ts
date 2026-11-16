@@ -20,6 +20,10 @@ export const repeatRules: RepeatRule[] = ['none', 'daily', 'weekly', 'monthly', 
 export type RepeatScope = 'only-this' | 'this-and-future';
 export const repeatScopes: RepeatScope[] = ['only-this', 'this-and-future'];
 
+/** The colors a user can give an event. The client turns each into its actual shades. */
+export type EventColor = 'purple' | 'red' | 'green' | 'navy' | 'pink' | 'yellow' | 'orange';
+export const eventColors: EventColor[] = ['purple', 'red', 'green', 'navy', 'pink', 'yellow', 'orange'];
+
 /** The details the user fills in for an event. Dates are "YYYY-MM-DD", times are "HH:mm". */
 export interface EventInput {
   title: string;
@@ -31,6 +35,8 @@ export interface EventInput {
   repeatDays?: number[];
   /** For a "custom" repeat: it happens every this many weeks, counted from the week of `date`. */
   repeatInterval?: number;
+  /** One of eventColors. Missing means the app picks a color from the title. */
+  color?: EventColor;
 }
 
 /** Same shape as the client's CalendarEvent, minus the fields that only matter on a device. */
@@ -89,6 +95,7 @@ const tableStatements = [
     repeatRule ENUM('none', 'daily', 'weekly', 'monthly', 'custom') NOT NULL,
     repeatDays JSON NULL,
     repeatInterval TINYINT NULL,
+    color VARCHAR(16) NULL,
     endDate DATE NULL,
     excludedDates JSON NOT NULL,
     updatedAt BIGINT NOT NULL,
@@ -163,6 +170,7 @@ export async function initializeDatabase(): Promise<void> {
     await pool.query(statement);
   }
   await addCustomRepeatColumns(pool);
+  await addColorColumn(pool);
   await promoteAdmin(pool);
 }
 
@@ -184,6 +192,17 @@ async function addCustomRepeatColumns(connection: Pool): Promise<void> {
        ADD COLUMN repeatDays JSON NULL AFTER repeatRule,
        ADD COLUMN repeatInterval TINYINT NULL AFTER repeatDays`,
   );
+}
+
+/** Brings an events table made before event colors existed up to date. */
+async function addColorColumn(connection: Pool): Promise<void> {
+  const [rows] = await connection.execute<RowDataPacket[]>(
+    `SELECT 1 FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'events' AND COLUMN_NAME = 'color'`,
+  );
+  if (rows.length === 0) {
+    await connection.query('ALTER TABLE events ADD COLUMN color VARCHAR(16) NULL AFTER repeatInterval');
+  }
 }
 
 /** Makes the user whose email is configured as adminEmail an admin, if they have registered. */
@@ -322,7 +341,7 @@ export async function updateUser(userId: string, changes: UserChanges): Promise<
 }
 
 const eventColumns =
-  'id, clientId, title, date, startTime, endTime, repeatRule, repeatDays, repeatInterval, endDate, excludedDates, updatedAt, deleted';
+  'id, clientId, title, date, startTime, endTime, repeatRule, repeatDays, repeatInterval, color, endDate, excludedDates, updatedAt, deleted';
 
 function toEvent(row: RowDataPacket): CalendarEvent {
   const event: CalendarEvent = {
@@ -342,6 +361,9 @@ function toEvent(row: RowDataPacket): CalendarEvent {
   if (row.repeatRule === 'custom') {
     event.repeatDays = row.repeatDays;
     event.repeatInterval = row.repeatInterval;
+  }
+  if (row.color) {
+    event.color = row.color;
   }
   if (row.endDate) {
     event.endDate = row.endDate;
@@ -376,8 +398,9 @@ async function insertEvent(
 ): Promise<number> {
   const [result] = await connection.execute<ResultSetHeader>(
     `INSERT INTO events
-       (userId, clientId, title, date, startTime, endTime, repeatRule, repeatDays, repeatInterval, endDate, excludedDates, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (userId, clientId, title, date, startTime, endTime, repeatRule, repeatDays, repeatInterval, color, endDate,
+        excludedDates, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       userId,
       randomUUID(),
@@ -387,6 +410,7 @@ async function insertEvent(
       input.endTime,
       input.repeat,
       ...repeatPattern(input),
+      input.color ?? null,
       endDate,
       JSON.stringify(excludedDates),
       Date.now(),
@@ -494,7 +518,7 @@ export async function updateEvent(
       // Changing from the very first day changes the whole series.
       await connection.execute(
         `UPDATE events SET title = ?, date = ?, startTime = ?, endTime = ?, repeatRule = ?, repeatDays = ?,
-           repeatInterval = ?, updatedAt = ? WHERE id = ?`,
+           repeatInterval = ?, color = ?, updatedAt = ? WHERE id = ?`,
         [
           input.title,
           input.date,
@@ -502,6 +526,7 @@ export async function updateEvent(
           input.endTime,
           input.repeat,
           ...repeatPattern(input),
+          input.color ?? null,
           Date.now(),
           event.id,
         ],
@@ -582,9 +607,9 @@ export async function syncEvents(userId: string, events: SyncedEvent[], since: s
       // updatedAt is assigned last because MySQL applies these assignments left to right.
       await connection.execute(
         `INSERT INTO events
-           (userId, clientId, title, date, startTime, endTime, repeatRule, repeatDays, repeatInterval, endDate,
+           (userId, clientId, title, date, startTime, endTime, repeatRule, repeatDays, repeatInterval, color, endDate,
             excludedDates, updatedAt, deleted)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS incoming
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS incoming
          ON DUPLICATE KEY UPDATE
            title = IF(incoming.updatedAt > events.updatedAt, incoming.title, events.title),
            date = IF(incoming.updatedAt > events.updatedAt, incoming.date, events.date),
@@ -593,6 +618,7 @@ export async function syncEvents(userId: string, events: SyncedEvent[], since: s
            repeatRule = IF(incoming.updatedAt > events.updatedAt, incoming.repeatRule, events.repeatRule),
            repeatDays = IF(incoming.updatedAt > events.updatedAt, incoming.repeatDays, events.repeatDays),
            repeatInterval = IF(incoming.updatedAt > events.updatedAt, incoming.repeatInterval, events.repeatInterval),
+           color = IF(incoming.updatedAt > events.updatedAt, incoming.color, events.color),
            endDate = IF(incoming.updatedAt > events.updatedAt, incoming.endDate, events.endDate),
            excludedDates = IF(incoming.updatedAt > events.updatedAt, incoming.excludedDates, events.excludedDates),
            deleted = IF(incoming.updatedAt > events.updatedAt, incoming.deleted, events.deleted),
@@ -606,6 +632,7 @@ export async function syncEvents(userId: string, events: SyncedEvent[], since: s
           event.endTime,
           event.repeat,
           ...repeatPattern(event),
+          event.color ?? null,
           event.endDate ?? null,
           JSON.stringify(event.excludedDates ?? []),
           event.updatedAt,

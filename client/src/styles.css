@@ -880,3 +880,37 @@ button {
   color: #fff;
   font-weight: 500;
 }
+
+/* The event form's color choices: "Auto" first, then one dot per color. */
+.event-color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-colors {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.event-color {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.event-color[aria-checked="true"] {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--text);
+}
+
+/* Faded until chosen, so it reads as "let the app pick" rather than one more color. */
+.event-color.auto[aria-checked="false"] {
+  opacity: 0.55;
+}

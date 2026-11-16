@@ -81,6 +81,7 @@ function editValues(event: CalendarEvent, date: string): EventInput {
     repeat: event.repeat,
     repeatDays: event.repeatDays,
     repeatInterval: event.repeatInterval,
+    color: event.color,
   };
 }
 

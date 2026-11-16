@@ -10,8 +10,9 @@ import {
   syncEvents,
   repeatRules,
   repeatScopes,
+  eventColors,
 } from '../database/database.ts';
-import type { EventInput, RepeatRule, RepeatScope, SyncedEvent } from '../database/database.ts';
+import type { EventColor, EventInput, RepeatRule, RepeatScope, SyncedEvent } from '../database/database.ts';
 
 const eventRouter = Object.assign(express.Router(), {
   docs: [
@@ -40,7 +41,7 @@ const eventRouter = Object.assign(express.Router(), {
       path: '/api/event',
       requiresAuth: true,
       description:
-        'Create an event. repeat is none, daily, weekly, monthly or custom. A custom repeat also needs repeatDays (weekdays 0–6 from Sunday) and repeatInterval (every 1–52 weeks)',
+        'Create an event. repeat is none, daily, weekly, monthly or custom. color is optional: purple, red, green, navy, pink, yellow or orange. A custom repeat also needs repeatDays (weekdays 0–6 from Sunday) and repeatInterval (every 1–52 weeks)',
       example: `curl -X POST localhost:3000/api/event -H 'Authorization: Bearer abc123' -H 'Content-Type: application/json' -d '{"title":"Gym", "date":"2026-10-20", "startTime":"07:00", "endTime":"08:00", "repeat":"custom", "repeatDays":[1, 3, 5], "repeatInterval":1}'`,
       response: {
         id: 1,
@@ -119,7 +120,7 @@ function isWeekday(value: unknown): value is number {
 
 /** The event details from a request body, or null if any are missing or malformed. */
 function readEventInput(body: Record<string, unknown> | undefined): EventInput | null {
-  const { title, date, startTime, endTime, repeat, repeatDays, repeatInterval } = body ?? {};
+  const { title, date, startTime, endTime, repeat, repeatDays, repeatInterval, color } = body ?? {};
   if (
     typeof title !== 'string' ||
     title.trim().length === 0 ||
@@ -128,11 +129,16 @@ function readEventInput(body: Record<string, unknown> | undefined): EventInput |
     !timePattern.test(startTime) ||
     typeof endTime !== 'string' ||
     !timePattern.test(endTime) ||
-    !repeatRules.includes(repeat as RepeatRule)
+    !repeatRules.includes(repeat as RepeatRule) ||
+    // Missing or null means the app picks the color.
+    (color !== undefined && color !== null && !eventColors.includes(color as EventColor))
   ) {
     return null;
   }
   const input: EventInput = { title: title.trim(), date, startTime, endTime, repeat: repeat as RepeatRule };
+  if (color) {
+    input.color = color as EventColor;
+  }
   // The days and interval only mean something for a custom repeat, so other rules drop them.
   if (input.repeat === 'custom') {
     if (
@@ -151,7 +157,7 @@ function readEventInput(body: Record<string, unknown> | undefined): EventInput |
   return input;
 }
 
-const invalidEventMessage = `title, date (YYYY-MM-DD), startTime and endTime (HH:mm), and repeat are required. A custom repeat also needs repeatDays (0–6 from Sunday) and repeatInterval (1–${maxRepeatInterval})`;
+const invalidEventMessage = `title, date (YYYY-MM-DD), startTime and endTime (HH:mm), and repeat are required. color is optional: ${eventColors.join(', ')}. A custom repeat also needs repeatDays (0–6 from Sunday) and repeatInterval (1–${maxRepeatInterval})`;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // A cursor is a changedAt value from an earlier sync, like "2026-10-22 14:03:11.482".

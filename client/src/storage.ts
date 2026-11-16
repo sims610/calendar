@@ -126,7 +126,7 @@ export async function createEvent(input: EventInput): Promise<void> {
  * interval are cleared for other rules, so changing away from a custom repeat removes them.
  */
 function detailsOf(input: EventInput): EventInput {
-  const { title, date, startTime, endTime, repeat } = input;
+  const { title, date, startTime, endTime, repeat, color } = input;
   const isCustom = repeat === "custom";
   return {
     title,
@@ -136,6 +136,7 @@ function detailsOf(input: EventInput): EventInput {
     repeat,
     repeatDays: isCustom ? input.repeatDays : undefined,
     repeatInterval: isCustom ? input.repeatInterval : undefined,
+    color,
   };
 }
 

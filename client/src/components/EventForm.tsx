@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { fromDateKey } from "../dateUtils";
+import { EVENT_COLORS, colorForTitle } from "../eventColors";
 import type { CalendarEvent, EventInput, RepeatRule, RepeatScope } from "../types";
+import { CheckIcon } from "./Icons";
 import { RepeatChoiceSheet } from "./RepeatChoiceSheet";
 
 interface EventFormProps {
@@ -52,6 +54,8 @@ export function EventForm({ event, initialValues, onSave, onDelete, onClose }: E
   const [pendingChoice, setPendingChoice] = useState<"save" | "delete" | null>(null);
 
   const isEditing = event !== null;
+  /** What "Auto" would color the event, so the user can see it before choosing. */
+  const autoColor = colorForTitle(form.title.trim());
   const isEditingRepeatingEvent = isEditing && event.repeat !== "none";
   const trimmedForm = { ...form, title: form.title.trim() };
 
@@ -233,6 +237,39 @@ export function EventForm({ event, initialValues, onSave, onDelete, onClose }: E
               </div>
             </>
           )}
+
+          <div className="event-color-field">
+            Color
+            <div className="event-colors" role="radiogroup" aria-label="Color">
+              <button
+                type="button"
+                className="event-color auto"
+                role="radio"
+                aria-checked={!form.color}
+                aria-label="Automatic, based on the title"
+                title="Automatic"
+                style={{ background: autoColor.border }}
+                onClick={() => updateField("color", undefined)}
+              >
+                {form.color ? "A" : <CheckIcon size={18} />}
+              </button>
+              {EVENT_COLORS.map((color) => (
+                <button
+                  key={color.id}
+                  type="button"
+                  className="event-color"
+                  role="radio"
+                  aria-checked={form.color === color.id}
+                  aria-label={color.name}
+                  title={color.name}
+                  style={{ background: color.border }}
+                  onClick={() => updateField("color", color.id)}
+                >
+                  {form.color === color.id && <CheckIcon size={18} />}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {error && <p className="form-error">{error}</p>}
 
