@@ -6,6 +6,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title ?? "Calendar", {
       body: data.body,
+      // The app's calendar icon, resolved against the service worker's scope.
+      icon: new URL("icon.svg", self.registration.scope).href,
       // Replaces an earlier notification for the same event instead of stacking up.
       tag: data.tag,
     }),
