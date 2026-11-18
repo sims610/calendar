@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { NamedSharedEvent } from "../api";
-import { colorForEvent, colorForPerson } from "../eventColors";
+import { colorForEvent, colorForPerson, eventColorStyle } from "../eventColors";
 import { describeRepeat, formatHour, formatTimeRange, minutesToTime } from "../dateUtils";
 import { layoutEvents } from "../layoutEvents";
 import type { CalendarEvent } from "../types";
@@ -135,8 +135,7 @@ export function DayView({
                     height: (positioned.endMinutes - positioned.startMinutes) * pixelsPerMinute,
                     left: `${column * widthPercent}%`,
                     width: `${widthPercent}%`,
-                    background: color.background,
-                    borderColor: color.border,
+                    ...eventColorStyle(color),
                   }}
                 >
                   <span className="event-title">{event.title}</span>
@@ -175,8 +174,7 @@ export function DayView({
                   height: durationMinutes * pixelsPerMinute,
                   left: `${column * widthPercent}%`,
                   width: `${widthPercent}%`,
-                  background: color.background,
-                  borderLeftColor: color.border,
+                  ...eventColorStyle(color),
                 }}
               >
                 <span className="event-title">{event.title}</span>

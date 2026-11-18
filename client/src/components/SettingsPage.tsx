@@ -8,7 +8,16 @@ import {
   type ReminderOption,
 } from "../notifications";
 import type { Account } from "../account";
-import { getSavedTheme, saveTheme, THEMES, type Theme } from "../theme";
+import {
+  APPEARANCES,
+  getSavedAppearance,
+  getSavedTheme,
+  saveAppearance,
+  saveTheme,
+  THEMES,
+  type Appearance,
+  type Theme,
+} from "../theme";
 import { CheckIcon } from "./Icons";
 // The deploy (ci.yml) stamps this with the build's date and time, e.g. 20261022.040710.
 import { version } from "../version.json";
@@ -40,11 +49,17 @@ export function SettingsPage({
   onOpenAdminSuggestions,
 }: SettingsPageProps) {
   const [selectedTheme, setSelectedTheme] = useState(getSavedTheme);
+  const [selectedAppearance, setSelectedAppearance] = useState(getSavedAppearance);
   const [signingOut, setSigningOut] = useState(false);
 
   const chooseTheme = (theme: Theme) => {
     saveTheme(theme);
     setSelectedTheme(theme);
+  };
+
+  const chooseAppearance = (appearance: Appearance) => {
+    saveAppearance(appearance);
+    setSelectedAppearance(appearance);
   };
 
   const signOut = async () => {
@@ -105,6 +120,27 @@ export function SettingsPage({
             </button>
           </section>
         )}
+
+        <section className="settings-section">
+          <h2 className="settings-heading">Appearance</h2>
+          <div className="reminder-options" role="radiogroup" aria-label="Appearance">
+            {APPEARANCES.map((appearance) => {
+              const selected = appearance.id === selectedAppearance;
+              return (
+                <button
+                  key={appearance.id}
+                  className="reminder-option"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => chooseAppearance(appearance.id)}
+                >
+                  {appearance.name}
+                  {selected && <CheckIcon size={20} />}
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
         <section className="settings-section">
           <h2 className="settings-heading">App color</h2>

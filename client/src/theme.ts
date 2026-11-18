@@ -50,3 +50,53 @@ export function saveTheme(theme: Theme) {
     // The color still changes for now; it just won't be remembered.
   }
 }
+
+// ---------- Light / dark appearance ----------
+
+/** "system" follows the device's dark mode setting. */
+export type Appearance = "system" | "light" | "dark";
+
+export const APPEARANCES: { id: Appearance; name: string }[] = [
+  { id: "system", name: "System" },
+  { id: "light", name: "Light" },
+  { id: "dark", name: "Dark" },
+];
+
+const APPEARANCE_STORAGE_KEY = "appearance";
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+let currentAppearance: Appearance = "system";
+
+/** The saved appearance, or "system" if none is saved (or storage can't be read). */
+export function getSavedAppearance(): Appearance {
+  try {
+    const saved = localStorage.getItem(APPEARANCE_STORAGE_KEY);
+    return APPEARANCES.some((appearance) => appearance.id === saved) ? (saved as Appearance) : "system";
+  } catch {
+    return "system";
+  }
+}
+
+/** Sets `data-appearance` on the page to "light" or "dark", which styles.css colors from. */
+function updateAppearance() {
+  const isDark = currentAppearance === "dark" || (currentAppearance === "system" && darkQuery.matches);
+  document.documentElement.dataset.appearance = isDark ? "dark" : "light";
+}
+
+// When following the device, switch as soon as the device does.
+darkQuery.addEventListener("change", updateAppearance);
+
+/** Draws the app light or dark. */
+export function applyAppearance(appearance: Appearance) {
+  currentAppearance = appearance;
+  updateAppearance();
+}
+
+/** Draws the app light or dark and remembers the choice for next time. */
+export function saveAppearance(appearance: Appearance) {
+  applyAppearance(appearance);
+  try {
+    localStorage.setItem(APPEARANCE_STORAGE_KEY, appearance);
+  } catch {
+    // It still changes for now; it just won't be remembered.
+  }
+}

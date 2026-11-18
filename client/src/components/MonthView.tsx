@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { NamedSharedEvent } from "../api";
 import { formatWeekday, fromDateKey, monthGridDays, startOfMonth, todayKey } from "../dateUtils";
-import { colorForEvent, colorForPerson } from "../eventColors";
+import { colorForEvent, colorForPerson, eventColorStyle } from "../eventColors";
 import type { CalendarEvent } from "../types";
 import { useSwipe } from "../useSwipe";
 
@@ -109,7 +109,7 @@ export function MonthView({
                 <span
                   key={chip.key}
                   className="month-chip"
-                  style={{ background: chip.color.background, borderLeftColor: chip.color.border }}
+                  style={eventColorStyle(chip.color)}
                 >
                   {chip.title || "(No title)"}
                 </span>

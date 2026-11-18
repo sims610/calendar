@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 export type EventColorId = "purple" | "red" | "green" | "navy" | "pink" | "yellow" | "orange";
 
 export interface EventColor {
@@ -18,6 +20,17 @@ export const EVENT_COLORS: EventColor[] = [
   { id: "yellow", name: "Yellow", background: "#fdf2cf", border: "#f2b705" },
   { id: "orange", name: "Orange", background: "#fdf3e1", border: "#d98a10" },
 ];
+
+/**
+ * The inline style that colors an event block or chip. styles.css turns these variables into the
+ * background and border, so dark mode can draw them differently.
+ */
+export function eventColorStyle(color: EventColor): CSSProperties {
+  return {
+    "--event-background": color.background,
+    "--event-border": color.border,
+  } as CSSProperties;
+}
 
 /** The same text always gets the same color. */
 function colorForText(text: string): EventColor {

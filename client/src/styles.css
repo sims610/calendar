@@ -9,8 +9,67 @@
   --now: #e0405a;
   --hour-label-width: 64px;
 
+  --background: #fff;
+  /* Bottom sheets and form fields. */
+  --surface: #fff;
+  /* Days outside the shown month. */
+  --surface-muted: #fafafa;
+  --secondary-text: #555;
+  --faint: #aaa;
+  --border: #ccc;
+  --press: rgba(0, 0, 0, 0.04);
+  --danger: #c62d3a;
+  --error-background: #fde2e4;
+  --error-text: #8a1c25;
+  /* The app color used as text or an icon on the page background. */
+  --theme-text: var(--theme);
+
+  color-scheme: light;
   font-family: Roboto, "Segoe UI", system-ui, sans-serif;
   color: var(--text);
+}
+
+/* theme.ts sets data-appearance from the Settings choice (or the device's, for "System"). */
+:root[data-appearance="dark"] {
+  --accent: #4dd2ee;
+  --text: #e8e8e8;
+  --muted: #9a9a9a;
+  --line: #2e2e2e;
+  --strip-background: #1c1c1c;
+  --now: #ff5c74;
+
+  --background: #121212;
+  --surface: #1e1e1e;
+  --surface-muted: #181818;
+  --secondary-text: #b5b5b5;
+  --faint: #666;
+  --border: #444;
+  --press: rgba(255, 255, 255, 0.06);
+  --danger: #ff6b76;
+  --error-background: #4a1a1f;
+  --error-text: #ffb3ba;
+  /* App colors are dark enough for white text, so lighten them to read on a dark page. */
+  --theme-text: color-mix(in srgb, var(--theme) 45%, #fff);
+
+  /* Native controls (date picker, dropdowns, scrollbars) draw dark too. */
+  color-scheme: dark;
+}
+
+/*
+ * Event colors come from eventColors.ts as --event-background (a pastel) and --event-border.
+ * Pastels glare on a dark page, so dark mode tints the background from the border color instead,
+ * and lightens the border so dark ones like navy still show.
+ */
+.event-block,
+.month-chip {
+  --event-edge: var(--event-border);
+  background: var(--event-background);
+}
+
+:root[data-appearance="dark"] .event-block,
+:root[data-appearance="dark"] .month-chip {
+  --event-edge: color-mix(in srgb, var(--event-border) 65%, #fff);
+  background: color-mix(in srgb, var(--event-border) 30%, var(--background));
 }
 
 * {
@@ -25,7 +84,7 @@ body,
 }
 
 body {
-  background: #fff;
+  background: var(--background);
 }
 
 button {
@@ -44,7 +103,7 @@ button {
   height: 100%;
   max-width: 640px;
   margin: 0 auto;
-  background: #fff;
+  background: var(--background);
 }
 
 .main {
@@ -146,11 +205,11 @@ button {
 
 .date-strip-day.selected {
   border-color: var(--accent);
-  background: #fff;
+  background: var(--background);
 }
 
 .date-strip-day.today .date-strip-number {
-  color: var(--theme);
+  color: var(--theme-text);
   font-weight: 700;
 }
 
@@ -164,8 +223,8 @@ button {
 
 .error-banner {
   padding: 8px 16px;
-  background: #fde2e4;
-  color: #8a1c25;
+  background: var(--error-background);
+  color: var(--error-text);
   font-size: 14px;
 }
 
@@ -233,7 +292,7 @@ button {
   padding-right: 12px;
   text-align: right;
   font-size: 15px;
-  color: #555;
+  color: var(--secondary-text);
 }
 
 .hour-line {
@@ -260,7 +319,7 @@ button {
   top: -7px; /* centres the 12px triangle on the 2px line */
   border-top: 6px solid transparent;
   border-bottom: 6px solid transparent;
-  border-left: 8px solid #000;
+  border-left: 8px solid var(--text);
 }
 
 .current-time-label {
@@ -268,7 +327,7 @@ button {
   bottom: 2px;
   left: 14px;
   padding: 0 2px;
-  background: #fff; /* keeps the hour label underneath from showing through */
+  background: var(--background); /* keeps the hour label underneath from showing through */
   font-size: 15px;
   color: var(--now);
 }
@@ -291,7 +350,7 @@ button {
 }
 
 .hour-slot:active {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--press);
 }
 
 .event-block {
@@ -303,8 +362,8 @@ button {
   padding: 6px 8px;
   overflow: hidden;
   text-align: left;
-  border-left: 4px solid;
-  border-bottom: 2px solid #fff; /* small gap between back-to-back events */
+  border-left: 4px solid var(--event-edge);
+  border-bottom: 2px solid var(--background); /* small gap between back-to-back events */
   /* Pressing and holding moves the event, so stop the phone selecting text or showing a menu. */
   user-select: none;
   -webkit-user-select: none;
@@ -320,14 +379,14 @@ button {
 
 /* Someone else's event: dashed, so it can't be mistaken for your own in the same color. */
 .event-block.shared {
-  border: 1px dashed;
-  border-left: 4px dashed;
+  border: 1px dashed var(--event-edge);
+  border-left: 4px dashed var(--event-edge);
 }
 
 .event-owner {
   font-size: 13px;
   font-weight: 500;
-  color: #555;
+  color: var(--secondary-text);
 }
 
 .event-title {
@@ -339,13 +398,13 @@ button {
 
 .event-time {
   font-size: 15px;
-  color: #555;
+  color: var(--secondary-text);
 }
 
 .event-repeat {
   display: flex;
   align-items: center;
-  color: #555;
+  color: var(--secondary-text);
 }
 
 .fab {
@@ -368,8 +427,8 @@ button {
 .bottom-nav {
   display: flex;
   padding-bottom: env(safe-area-inset-bottom);
-  border-top: 1px solid #ccc;
-  background: #fff;
+  border-top: 1px solid var(--border);
+  background: var(--background);
 }
 
 .bottom-nav-tab {
@@ -380,11 +439,11 @@ button {
   gap: 2px;
   padding: 8px 0;
   font-size: 14px;
-  color: #aaa;
+  color: var(--faint);
 }
 
 .bottom-nav-tab:not(:disabled) {
-  color: #666;
+  color: var(--secondary-text);
 }
 
 .bottom-nav-tab:disabled {
@@ -392,7 +451,7 @@ button {
 }
 
 .bottom-nav-tab.active {
-  color: var(--theme);
+  color: var(--theme-text);
 }
 
 .bottom-nav-icon {
@@ -461,7 +520,7 @@ button {
   margin-top: 8px;
   padding: 8px 0;
   font-weight: 500;
-  color: var(--theme);
+  color: var(--theme-text);
 }
 
 /* 5 per row at every width, so the 10 colors always make two full rows. */
@@ -530,7 +589,7 @@ button {
 
 .reminder-option[aria-checked="true"] {
   font-weight: 500;
-  color: var(--theme);
+  color: var(--theme-text);
 }
 
 .settings-note {
@@ -677,7 +736,7 @@ button {
   max-width: 640px;
   padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
   border-radius: 16px 16px 0 0;
-  background: #fff;
+  background: var(--surface);
 }
 
 .sheet h2 {
@@ -701,9 +760,9 @@ button {
   font: inherit;
   font-size: 16px; /* 16px stops iOS from zooming in on focus */
   color: var(--text);
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface);
 }
 
 .form-row {
@@ -731,7 +790,7 @@ button {
 .repeat-day {
   width: 40px;
   height: 40px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 50%;
   font-weight: 500;
 }
@@ -753,7 +812,7 @@ button {
 }
 
 .form-error {
-  color: #c62d3a;
+  color: var(--danger);
 }
 
 .form-buttons {
@@ -785,7 +844,7 @@ button {
 }
 
 .button-danger {
-  color: #c62d3a;
+  color: var(--danger);
 }
 
 /* ---------- Repeating event choice ---------- */
@@ -803,7 +862,7 @@ button {
 }
 
 .button-choice {
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   text-align: left;
 }
 
@@ -846,9 +905,9 @@ button {
   font: inherit;
   font-size: 16px; /* 16px stops iOS from zooming in on focus */
   color: var(--text);
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--background);
 }
 
 .account-form textarea {
@@ -875,7 +934,7 @@ button {
   align-self: center;
   padding: 8px;
   font-size: 14px;
-  color: var(--theme);
+  color: var(--theme-text);
 }
 
 /* ---------- New version notice ---------- */
@@ -939,7 +998,7 @@ button {
 }
 
 .event-color[aria-checked="true"] {
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--text);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text);
 }
 
 /* Faded until chosen, so it reads as "let the app pick" rather than one more color. */
@@ -1016,7 +1075,7 @@ button {
 
 .month-day.outside {
   color: var(--muted);
-  background: #fafafa;
+  background: var(--surface-muted);
 }
 
 .month-day-number {
@@ -1042,7 +1101,7 @@ button {
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--text);
-  border-left: 3px solid;
+  border-left: 3px solid var(--event-edge);
   border-radius: 2px;
 }
 
