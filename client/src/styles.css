@@ -80,6 +80,38 @@ button {
   color: var(--accent);
 }
 
+/* The Day / Month dropdown. The native select keeps the phone's own picker; the caret is drawn beside it. */
+.header-view {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.header-view svg {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+}
+
+.header-view-select {
+  padding: 6px 28px 6px 10px;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 500;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: 6px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+/* The open list is drawn by the browser on a light background. */
+.header-view-select option {
+  color: var(--text);
+}
+
 .hidden-date-input {
   position: absolute;
   width: 0;
@@ -913,4 +945,110 @@ button {
 /* Faded until chosen, so it reads as "let the app pick" rather than one more color. */
 .event-color.auto[aria-checked="false"] {
   opacity: 0.55;
+}
+
+/* ---------- Month view ---------- */
+
+.month-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden; /* hides the month while it's pulled sideways by a swipe */
+  touch-action: pan-y; /* sideways swipes change the month */
+}
+
+.month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  background: var(--strip-background);
+}
+
+.month-grid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  transition: transform 200ms ease-out; /* springs back when a swipe is too short */
+}
+
+.month-grid.swiping {
+  transition: none;
+}
+
+.month-grid.slide-in-from-right {
+  animation: slide-in-from-right 250ms ease-out;
+}
+
+.month-grid.slide-in-from-left {
+  animation: slide-in-from-left 250ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .month-grid,
+  .month-grid.slide-in-from-right,
+  .month-grid.slide-in-from-left {
+    transition: none;
+    animation: none;
+  }
+}
+
+.month-day {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px 2px 4px;
+  overflow: hidden;
+  text-align: left;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.month-day.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.month-day.outside {
+  color: var(--muted);
+  background: #fafafa;
+}
+
+.month-day-number {
+  align-self: center;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.month-day.today .month-day-number {
+  min-width: 22px;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  background: var(--theme);
+  border-radius: 11px;
+}
+
+.month-chip {
+  padding: 1px 3px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text);
+  border-left: 3px solid;
+  border-radius: 2px;
+}
+
+.month-more {
+  padding: 0 3px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted);
 }

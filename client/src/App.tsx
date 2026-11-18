@@ -18,9 +18,10 @@ import { BottomNav, type Page } from "./components/BottomNav";
 import { DateStrip } from "./components/DateStrip";
 import { DayView } from "./components/DayView";
 import { EventForm } from "./components/EventForm";
-import { Header } from "./components/Header";
+import { Header, loadCalendarView, saveCalendarView, type CalendarView } from "./components/Header";
 import { HomePage } from "./components/HomePage";
 import { MigratePrompt } from "./components/MigratePrompt";
+import { MonthView } from "./components/MonthView";
 import { PeoplePage } from "./components/PeoplePage";
 import { PlusIcon } from "./components/Icons";
 import { ProfilePage } from "./components/ProfilePage";
@@ -28,7 +29,14 @@ import { RepeatChoiceSheet } from "./components/RepeatChoiceSheet";
 import { SettingsPage } from "./components/SettingsPage";
 import { SuggestFeaturePage } from "./components/SuggestFeaturePage";
 import { SharedEventSheet } from "./components/SharedEventSheet";
-import { addDays, minutesToTime, timeToMinutes, todayKey } from "./dateUtils";
+import {
+  addDays,
+  addMonths,
+  minutesToTime,
+  monthGridDays,
+  timeToMinutes,
+  todayKey,
+} from "./dateUtils";
 import { registerPush, unregisterPush } from "./notifications";
 import type { CalendarEvent, EventInput, RepeatScope } from "./types";
 
@@ -88,7 +96,10 @@ function editValues(event: CalendarEvent, date: string): EventInput {
 export function App() {
   const [page, setPage] = useState<Page>("calendar");
   const [selectedDate, setSelectedDate] = useState(todayKey());
+  const [view, setView] = useState<CalendarView>(loadCalendarView);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  /** The user's events on each day of the month grid, while the month view is showing. */
+  const [monthEvents, setMonthEvents] = useState(new Map<string, CalendarEvent[]>());
   const [loadError, setLoadError] = useState("");
   const [formState, setFormState] = useState<FormState>({ mode: "closed" });
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
@@ -154,13 +165,22 @@ export function App() {
 
   const loadEvents = useCallback(async () => {
     try {
-      setEvents(await storage.getEventsForDay(selectedDate));
+      if (view === "month") {
+        setMonthEvents(await storage.getEventsForDays(monthGridDays(selectedDate)));
+      } else {
+        setEvents(await storage.getEventsForDay(selectedDate));
+      }
       setLoadError("");
     } catch {
       setLoadError("Couldn't load your events.");
     }
     // Storage shows the signed-in user's events, so load again when that changes.
-  }, [selectedDate, account]);
+  }, [selectedDate, view, account]);
+
+  const changeView = (newView: CalendarView) => {
+    saveCalendarView(newView);
+    setView(newView);
+  };
 
   useEffect(() => {
     loadEvents();
@@ -405,34 +425,57 @@ export function App() {
   const ownerNames = new Map(
     connections.filter((c) => c.status === "accepted").map((c) => [c.user.id, c.user.name]),
   );
-  const daySharedEvents = sharedEvents.flatMap((event) => {
-    const ownerName = ownerNames.get(event.ownerUserId);
-    return ownerName !== undefined &&
-      !hiddenPeople.includes(event.ownerUserId) &&
-      storage.occursOn(event, selectedDate)
-      ? [{ ...event, ownerName }]
-      : [];
-  });
+  /** Other people's events on `dateKey`, leaving out anyone the user chose to hide. */
+  const sharedEventsOn = (dateKey: string): api.NamedSharedEvent[] =>
+    sharedEvents.flatMap((event) => {
+      const ownerName = ownerNames.get(event.ownerUserId);
+      return ownerName !== undefined &&
+        !hiddenPeople.includes(event.ownerUserId) &&
+        storage.occursOn(event, dateKey)
+        ? [{ ...event, ownerName }]
+        : [];
+    });
 
   return (
     <div className="app">
-      <Header selectedDate={selectedDate} onSelectDate={setSelectedDate} />
-      <DateStrip selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+      <Header
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+        view={view}
+        onViewChange={changeView}
+      />
+      {view === "day" && <DateStrip selectedDate={selectedDate} onSelectDate={setSelectedDate} />}
 
       {loadError && <div className="error-banner">{loadError}</div>}
 
       <main className="main">
-        <DayView
-          date={selectedDate}
-          events={events}
-          sharedEvents={daySharedEvents}
-          onEventClick={(event) => setFormState({ mode: "edit", event })}
-          onSharedEventClick={setOpenSharedEvent}
-          onEventMove={moveEvent}
-          onEmptySlotClick={(hour) => setFormState({ mode: "create", startHour: hour })}
-          onNextDay={() => setSelectedDate(addDays(selectedDate, 1))}
-          onPreviousDay={() => setSelectedDate(addDays(selectedDate, -1))}
-        />
+        {view === "month" ? (
+          <MonthView
+            date={selectedDate}
+            eventsByDay={monthEvents}
+            sharedEventsByDay={
+              new Map(monthGridDays(selectedDate).map((day) => [day, sharedEventsOn(day)]))
+            }
+            onSelectDay={(day) => {
+              setSelectedDate(day);
+              changeView("day");
+            }}
+            onNextMonth={() => setSelectedDate(addMonths(selectedDate, 1))}
+            onPreviousMonth={() => setSelectedDate(addMonths(selectedDate, -1))}
+          />
+        ) : (
+          <DayView
+            date={selectedDate}
+            events={events}
+            sharedEvents={sharedEventsOn(selectedDate)}
+            onEventClick={(event) => setFormState({ mode: "edit", event })}
+            onSharedEventClick={setOpenSharedEvent}
+            onEventMove={moveEvent}
+            onEmptySlotClick={(hour) => setFormState({ mode: "create", startHour: hour })}
+            onNextDay={() => setSelectedDate(addDays(selectedDate, 1))}
+            onPreviousDay={() => setSelectedDate(addDays(selectedDate, -1))}
+          />
+        )}
         <button
           className="fab"
           onClick={() => setFormState({ mode: "create" })}

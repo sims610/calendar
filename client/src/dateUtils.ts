@@ -4,7 +4,11 @@
 import type { EventInput } from "./types";
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const FULL_MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const WEEKDAY_NAMES =["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function toDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -42,6 +46,41 @@ export function formatWeekday(dateKey: string): string {
 /** The Sunday that starts the week `dateKey` is in. */
 export function startOfWeek(dateKey: string): string {
   return addDays(dateKey, -fromDateKey(dateKey).getDay());
+}
+
+/** "2026-11-18" → "2026-11-01" */
+export function startOfMonth(dateKey: string): string {
+  return `${dateKey.slice(0, 7)}-01`;
+}
+
+/**
+ * The same day `months` months later (or earlier, if negative). A day the target month doesn't
+ * have becomes its last day, so Jan 31 + 1 month is Feb 28 (or 29).
+ */
+export function addMonths(dateKey: string, months: number): string {
+  const date = fromDateKey(dateKey);
+  const day = date.getDate();
+  // Start from the 1st so setMonth can't spill into the month after.
+  date.setDate(1);
+  date.setMonth(date.getMonth() + months);
+  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(day, daysInMonth));
+  return toDateKey(date);
+}
+
+/** Days in a month grid: 6 full weeks starting on the Sunday on or before the 1st. */
+export const MONTH_GRID_DAYS = 42;
+
+/** The 42 days shown in the month grid for the month `dateKey` is in. */
+export function monthGridDays(dateKey: string): string[] {
+  const first = startOfWeek(startOfMonth(dateKey));
+  return Array.from({ length: MONTH_GRID_DAYS }, (_, index) => addDays(first, index));
+}
+
+/** "2026-11-18" → "November 2026" */
+export function formatMonthYear(dateKey: string): string {
+  const date = fromDateKey(dateKey);
+  return `${FULL_MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 /** Whole days from `fromKey` to `toKey`. Rounding absorbs the hour a daylight saving change adds or removes. */

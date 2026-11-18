@@ -97,7 +97,26 @@ export async function getEventsForDay(date: string): Promise<CalendarEvent[]> {
   );
 }
 
-type SyncFields = "clientId" | "ownerUserId" | "updatedAt" | "deleted" | "dirty";
+/** The events on each of the given days, including repeats, sorted by start time. */
+export async function getEventsForDays(dateKeys: string[]): Promise<Map<string, CalendarEvent[]>> {
+  const owner = currentOwner();
+  const database = await databasePromise;
+  const ownEvents = (await database.getAll("events")).filter(
+    (event) => !event.deleted && event.ownerUserId === owner,
+  );
+  const eventsByDay = new Map<string, CalendarEvent[]>();
+  for (const dateKey of dateKeys) {
+    eventsByDay.set(
+      dateKey,
+      ownEvents
+        .filter((event) => occursOn(event, dateKey))
+        .sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    );
+  }
+  return eventsByDay;
+}
+
+type SyncFields ="clientId" | "ownerUserId" | "updatedAt" | "deleted" | "dirty";
 
 /** A brand-new event for `ownerUserId`. IndexedDB fills in the id because the store uses autoIncrement. */
 function newEvent(details: Omit<CalendarEvent, SyncFields | "id">, ownerUserId: string): CalendarEvent {
